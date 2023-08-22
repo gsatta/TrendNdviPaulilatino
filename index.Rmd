@@ -485,7 +485,7 @@ map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
               highlightOptions = highlightOptions(color = "white", weight = 2,
                                                   bringToFront = TRUE),
               popup = ~paste("COD:", COD, "<br/>coef:", coef, "<br/>classe:", clss_tr),
-              group = 'pixel_trend',
+              group = 'Crowns',
               stroke = TRUE,
               weight = 1
   ) %>%
@@ -502,6 +502,7 @@ map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
   )
 
 map
+
 ```
 
 ```{r, eval=FALSE}
