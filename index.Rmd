@@ -1,0 +1,508 @@
+---
+title: "NDVI Trend Analysis Paulilatino"
+output: html_document
+date: "2023-08-22"
+---
+
+Questo documento riassume il procedimento utilizzato per estrarre i valori dell'NDVI per ogni pixel all'interno dei poligoni delle chiome per almeno i 2/3 della propria area.
+
+```{r, message= FALSE, warning= FALSE}
+library(sf)
+library(dplyr)
+library(raster)
+```
+
+```{r, eval=FALSE}
+# Carica i file necessari all'elaborazione
+ndvi <- brick("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/MODELLO/RASTER/ndvi_merged.tif")
+
+crowns0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI.shp")
+```
+
+```{r, eval=FALSE}
+# Proietta le feature "crowns"
+crowns <- st_transform(crowns0, crs = "+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs")
+
+# Supponendo che "crowns" sia il tuo oggetto sf
+crowns <- crowns %>%
+  group_by(AREA) %>%
+  mutate(ID = row_number()) %>%
+  ungroup() %>%
+  mutate(CODICE_UNIVOCO = paste(AREA, ID, sep = "_"))
+
+# Salva l'oggetto sf nel formato Shapefile
+st_write(crowns, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_correct.shp", append = FALSE)
+```
+
+Questo è la struttura e la composizione del file crowns.
+
+```{r, include=FALSE}
+crowns <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_correct.shp")
+```
+
+```{r, echo= FALSE}
+crowns
+```
+
+------------------------------------------------------------------------
+
+In questa sezione viene ritagliato il raster multilayer ndvi sulla base dell'estensione dei poligoni situati nelle aree:
+
+```{r, eval=FALSE}
+#  Carica il file raster multilayer
+ndvi <- terra::rast("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/MODELLO/RASTER/ndvi_merged.tif")
+
+# Carica il file SHP dei poligoni
+crowns <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_correct.shp")
+
+# Imposta la cartella di output
+output_folder <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/RASTER/NDVI_CLIPPED"
+```
+
+```{r, eval=FALSE}
+# Trova i nomi unici delle aree
+unique_aree <- unique(crowns$AREA)
+
+# Itera attraverso le aree
+for (area_nome in unique_aree) {
+  area_poligoni <- crowns[crowns$AREA == area_nome, ]
+  
+  # Crea un'estensione totale per i poligoni dell'area
+  area_extent <- st_bbox(area_poligoni)
+  
+  # Ritaglia il raster con l'estensione totale dell'area
+  raster_ritagliato <- crop(ndvi, area_extent)
+
+  # Crea il percorso completo per il salvataggio
+  nome_file <- file.path(output_folder, paste(area_nome,"_ndvi", ".tif", sep = ""))
+  
+  # Salva il raster ritagliato con il nome dell'area
+  terra::writeRaster(raster_ritagliato, nome_file, overwrite = TRUE)
+  
+  cat("Raster ritagliato e salvato per l'area:", area_nome, "\n")
+}
+
+cat("Processo completato.")
+
+```
+
+------------------------------------------------------------------------
+
+```{r, message=FALSE, warning=FALSE}
+# Load the required libraries
+library(sf)
+library(terra)
+library(readr)
+library(dplyr)
+```
+
+In questa sezione vado a rinominare i layer di tutti i file raster di ogni area con le date delle immagini satellitari.
+
+```{r, eval=FALSE}
+raster_folder0  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/RASTER/NDVI_CLIPPED"
+
+# List files in the folders
+raster_files0 <- list.files(raster_folder0, pattern = ".tif$", full.names = TRUE)
+
+output_folder0 <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/RASTER/NDVI_CLIPPED_NEW"
+
+date <- read_csv("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/MODELLO/CSV/merged_df.csv")
+```
+
+```{r, eval=FALSE}
+# Seleziono e creo un nuovo file con le date
+dates <- unique(date$date)
+
+# Estrarre la data
+year_month <- unique(date$date)
+
+# Itera attraverso i file raster e rinomina i layer con le date
+for (i in seq_along(raster_files0)) {
+  raster_file <- terra::rast(raster_files0[i])
+  names(raster_file) <- year_month
+  new_filename <- file.path(output_folder0, paste0(basename(raster_files0[i])))
+  writeRaster(raster_file, filename = new_filename, overwrite = TRUE)
+}
+```
+
+------------------------------------------------------------------------
+
+In questa sezione vado ad estrarre i pixel che sono situati all'interno, per almeno il 2/3 della loro area, dei poligoni delle chiome. In nuovi file con i pixel estratti saranno in formato shp.
+
+```{r, eval=FALSE}
+# Set the path to the shapefile and raster file
+shapefile_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas"
+raster_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/RASTER/NDVI_CLIPPED_NEW"
+output_folder <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_EXTRACTED"
+```
+
+```{r, eval=FALSE}
+# List files in the folders
+raster_files <- list.files(raster_folder, pattern = ".tif$", full.names = TRUE)
+shapefile_files <- list.files(shapefile_folder, pattern = ".shp$", full.names = TRUE)
+```
+
+```{r, eval= FALSE}
+# Iterate through files
+for (i in 1:length(raster_files)) {
+  shp0 <- vect(shapefile_files[7])
+  rast <- terra::rast(raster_files[7])
+
+  # Extract raster values
+  ex <- terra::extract(rast, shp0, method = "simple", exact = TRUE, xy = TRUE, ID = FALSE)
+
+  # Convert shp from spatvector to sf object
+  shp <- st_as_sf(shp0, crs = 32632)
+
+  # If you want to convert the area to another unit, you can use the st_transform function
+  shp$estensione <- st_area(st_transform(shp, crs = 32632), square = TRUE) # Change new_crs to the desired coordinate system
+
+  # Filter polygons with at least 2/3 area coverage
+  ex_filtered <- ex[ex$fraction >= (2/3),]
+
+  # Create an sf object from the filtered data
+  ex_sf <- st_as_sf(ex_filtered, coords = c("x", "y"))
+
+  # Assign WGS 84 CRS to your sf object
+  ex_sf <- st_set_crs(ex_sf, 32632)
+
+  # Remove the fraction column (no longer needed now)
+  ex_sf$fraction <- NULL
+
+  # Remove duplicate rows based on all columns
+  ex_sf2 <- distinct(ex_sf)
+
+  # Assign the CRS of ex_sf to polygons
+  polygons <- st_as_sf(shp, st_crs(ex_sf2))
+
+  # Perform spatial join based on the position of ex_sf and polygons
+  sf_join <- st_join(ex_sf2, polygons)
+
+  # Calculate square side length (3 meters)
+  side_length <- 3
+
+  # Create squares using st_buffer
+  quadrat_sf <- st_buffer(sf_join, side_length / 2, endCapStyle = "SQUARE")
+
+  # Set CRS (EPSG:32632)
+  quadrat_sf <- st_set_crs(quadrat_sf, 32632)
+  
+  # Elimina la colonna estensione
+  quadrat_sf$estensione <- NULL 
+
+  # Generate output filename based on the shapefile name
+  area_name <- tools::file_path_sans_ext(basename(shapefile_files[7]))
+  output_filename <- file.path(output_folder, paste0(area_name, ".shp"))
+
+  # Write output shapefile
+  st_write(quadrat_sf, output_filename, driver = "ESRI Shapefile", append = FALSE)
+}
+```
+
+------------------------------------------------------------------------
+
+In questa sezione si preparano i file shp dei pixel estratti per ogni poligono della chioma e area alla sucessive elaborazioni. In particolare, dopo aver caricato tutti i file come oggetti sf, si estraggono le date dal file e si rinominano tutte le colonne. Questo è necessario perchè i nomi delle colonne non hanno ancora un formato compatibile con le date. Si trasforma in fattoriale la colonna `AREA`. Si ripulisce il dataset dalle colonne non più necessarie.
+
+```{r, eval = FALSE}
+library(sf)
+library(dplyr)
+library(tidyr)
+```
+
+```{r, eval = FALSE}
+INPUT_folder <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_EXTRACTED"
+
+# Ottenere la lista dei file SHP nella cartella
+INPUT_shp <- list.files(path = INPUT_folder, pattern = "\\.shp$", full.names = TRUE)
+
+# Caricare tutti i file SHP in una lista di oggetti sf
+shp_list <- lapply(INPUT_shp, st_read)
+
+# Estrai la data e rinomina le colonne
+for (i in seq_along(shp_list)) {
+  col_names <- colnames(shp_list[[i]])
+  date_cols <- grep("^X\\d{4}\\.\\d{2}\\.\\d{2}$", col_names)  # Modifica il pattern in base al formato effettivo della data
+  
+  new_col_names <- gsub("^X(\\d{4})\\.(\\d{2})\\.(\\d{2})$", "\\1-\\2-\\3", col_names[date_cols])
+  colnames(shp_list[[i]])[date_cols] <- new_col_names
+  
+  # Aggiungi la colonna con il nome del file di origine
+  shp_list[[i]]$file_name <- tools::file_path_sans_ext(basename(INPUT_shp[i]))
+  
+  # Trasforma la colonna 'area' in un fattore
+  shp_list[[i]]$AREA <- as.factor(shp_list[[i]]$AREA)
+}
+
+# Rimuovi le  colonne non necessarie
+cols_to_exclude <- c("ID", "file_name")
+
+long_format_list <- lapply(shp_list, function(shp) {
+  shp %>%
+    select(-one_of(cols_to_exclude)) %>%
+    pivot_longer(
+      cols = -c(geometry, CODICE_, AREA),  # Include anche la colonna "geometry"
+      names_to = "date",
+      values_to = "ndvi"
+    ) %>%
+    mutate(date = as.Date(date))
+})
+```
+
+Si modifica il nome della colonna `value` in `ndvi` per ogni oggetto sf della lista. Sucessivamente si crea un file unico contente tutti gli oggetti della lista e lo si salva in locale.
+
+```{r, eval = FALSE}
+shapefile_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas"
+
+# Modifica il nome della colonna value in ndvi per ciascun oggetto sf nella lista
+for (i in seq_along(long_format_list)) {
+  long_format_list[[i]] <- long_format_list[[i]] %>%
+    rename(COD = CODICE_)
+}
+
+# Unisci tutti gli oggetti sf nella lista in un unico oggetto sf
+combined_long_format <- bind_rows(long_format_list)
+
+# Specifica il percorso del file in cui desideri salvare il tuo oggetto sf combinato
+output_file3 <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/NDVI_VALUES.shp"
+
+# Salva l'oggetto sf combinato nel file shapefile
+st_write(combined_long_format, output_file3, append= FALSE)
+```
+
+------------------------------------------------------------------------
+
+In questa sezione si calcola l'NDVI medio per ogni data e area in modo da poter vedere successivamente la tendenza generale dei ogni singola area.
+
+```{r, message =FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(sf)
+```
+
+```{r, eval= FALSE}
+NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/NDVI_VALUES.shp")
+
+# Calcola l'NDVI medio per ogni data e per ogni area
+ndvi_avg_areas <- NDVI_VALUES %>%
+  group_by(date, AREA) %>%
+  summarise(mean_NDVI = mean(ndvi, na.rm = TRUE))
+
+# Salva l'oggetto sf combinato nel file shapefile
+st_write(ndvi_avg_areas, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndvi_avg_areas.shp", append= FALSE)
+```
+
+```{r, eval = FALSE}
+ndvi_avg_areas1 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndvi_avg_areas.shp")
+
+shapefile_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas"
+
+shapefile_files <- list.files(shapefile_folder, pattern = ".shp$", full.names = TRUE)
+
+# Read and combine all shapefiles
+crowns0 <- lapply(shapefile_files, st_read)
+
+# Modifica il nome della colonna CODice_ in COD
+crowns0 <- lapply(crowns0, function(x) {
+  names(x)[names(x) == "CODICE_"] <- "COD"
+  return(x)
+})
+
+# Combina i dati
+crowns <- bind_rows(crowns0)
+crowns <- bind_rows(crowns0)
+st_crs(crowns) <- 32632
+
+st_write(crowns, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_merged.shp", append = FALSE)
+
+# Merge the datasets based on date and AREA
+ndvi_avg_areas2 <- ndvi_avg_areas1 %>%
+  st_join(crowns, by = c("date", "AREA")) %>%
+  select(date, AREA = AREA.x, mean_NDVI, ID, CODICE_)
+
+# Set the geometry column from crowns as the active one
+st_geometry(ndvi_avg_areas2) <- "geometry.y"
+
+# Salva l'oggetto sf combinato nel file shapefile
+st_write(ndvi_avg_areas2, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndv_areas2.shp", append= FALSE)
+```
+
+------------------------------------------------------------------------
+
+In questa sezione vediamo la tendenza generale dell'NDVI per ogni singola area.
+
+*Possiamo notare che nella zona di Iscala_Erveghe la tendenza dell'NDVI è positiva. Questo potrebbe essere un errore dovuto alla piccola dimensione delle piante di olivastro che si trovano sopra piante di lentisco. I valori di riflettanza rilevati dal satellite, con una risoluzione spaziale di 3 m, quindi sono sogetti alla forte influenza del lentisco.*
+
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(sf)
+library(dplyr)
+```
+
+```{r, message= FALSE, warning=FALSE}
+# Carica il file dei valori dell'ndvi medio per ogni area
+ndvi_avg <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndv_areas2.shp")
+
+# Crea un grafico delle tendenze temporali usando ggplot2 e aggiungi etichette per ciascuna area
+plot <- ggplot(ndvi_avg, aes(x = date, y = mean_NDVI, group = AREA, color = AREA)) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1.2) +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Tendenze temporali dell'NDVI per ciascuna area",
+       x = "Date",
+       y = "NDVI") +
+  theme_minimal()
+
+plot
+```
+
+------------------------------------------------------------------------
+
+In questa sezione vado a lavorare sulle singole chiome degli alberi e non sui valori medi delle aree per ottenere come risultato finale un nuovo dataframe con il codice delle piante e il coefficiente angolare dell'equazione della tendenza dell'NDVI calcolata tramite una regressione lieneare.
+
+```{r, eval = FALSE}
+# Carica i pacchetti necessari
+library(tidyverse)
+library(sf)
+library(dplyr)
+```
+
+```{r, eval = FALSE}
+# Carica i file delle chiome e dei pixel estratti in formato shp
+crowns <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_merged.shp")
+
+NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/NDVI_VALUES.shp")
+
+# Step 1: Calcola la media di NDVI per ogni data e COD
+ndvi_aggregated <- NDVI_VALUES %>%
+  group_by(COD, date) %>%
+  summarise(ndvi = mean(ndvi))
+
+# Effettua il join in base alla colonna COD
+joined_df <- crowns %>%
+  st_join(ndvi_aggregated %>% select(geometry, date, ndvi), by = "COD")
+
+# Rimuovi le righe con valori NA
+cleaned_df <- na.omit(joined_df)
+
+# Salva l'oggetto sf combinato nel file shapefile
+st_write(cleaned_df, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp", append= FALSE)
+```
+
+```{r, eval = FALSE}
+# Carica il nuovo file combinato
+NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp")
+
+# Converti COD in un fattore (se non è già stato fatto)
+NDVI_VALUES$COD <- as.factor(NDVI_VALUES$COD)
+
+# Raggruppa per COD e calcola la regressione lineare per ciascun gruppo
+pixel_trend <- NDVI_VALUES %>%
+  group_by(COD) %>%
+  summarise(coef = coef(lm(ndvi ~ date))[2])
+
+# Approssima i coefficienti alla quinta cifra decimale senza notazione esponenziale
+pixel_trend <- pixel_trend %>%
+  mutate(
+    coef = round(coef, 6)
+  )
+
+st_write(pixel_trend, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend.shp")
+```
+
+------------------------------------------------------------------------
+
+In questa sezione perparo il dataframe per visualizzare interattivamente la tendenza delle singole chiome in una mappa.
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(leaflet)
+library(sf)
+library(quadcleanR)
+```
+
+```{r, include=FALSE}
+# Imposta l'opzione scipen su un valore elevato per eliminare la notazione esponenziale dei valori
+options(scipen = 999)
+```
+
+```{r, eval=FALSE}
+# Carico il file de
+pixel_trend0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend.shp")
+
+# Transform to WGS84
+pixel_trend_wgs84 <- st_transform(pixel_trend0, crs = 4326)
+
+pixel_trend_wgs84$coef <- format(pixel_trend_wgs84$coef, scientific = FALSE)
+
+# Converti la colonna "coef" in un vettore numerico
+pixel_trend_wgs84$coef <- as.numeric(pixel_trend_wgs84$coef)
+
+pixel_trend <- pixel_trend_wgs84
+
+# Define the breaks for the categories
+breaks <- quantile(pixel_trend_wgs84$coef, probs = seq(0, 1, length.out = 5))
+
+# Aggiungi una nuova colonna "classe_trend" con le etichette delle classi
+pixel_trend <- pixel_trend %>%
+  mutate(classe_trend = case_when(
+    coef < breaks[[1]] + 0.000009 ~ "Decrescente Marcato",
+    coef >= breaks[[1]] + 0.000009 & coef <= breaks[[2]] ~ "Decrescente Moderato",
+    coef > breaks[[2]] & coef <= breaks[[3]] ~ "Decrescente Lieve",
+    coef > breaks[[3]] & coef <= breaks[[4]] ~ "Stazionario",
+    coef > breaks[[4]] ~ "Crescente"
+  ))
+
+# Salvo il file con le classi
+st_write(pixel_trend, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend2.shp")
+```
+
+```{r, message=FALSE, warning=FALSE}
+# Carico il nuovo file con le classi
+pixel_trend <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend2.shp")
+
+# Define a custom color palette for classes
+class_palette <- c("Crescente" = "#00ff00",  # Green
+                   "Stazionario" = "#adff2f",  # Yellow-green
+                   "Decrescente Lieve" = "yellow",
+                   "Decrescente Moderato" = "orange",
+                   "Decrescente Marcato" = "red")
+
+# Create a color factor with the custom palette and class labels
+color_factor <- leaflet::colorFactor(palette = class_palette, levels = c("Crescente", "Stazionario", "Decrescente Lieve", "Decrescente Moderato", "Decrescente Marcato"))
+
+# Definisci l'ordine desiderato delle etichette delle classi
+custom_order <- c("Crescente", "Stazionario", "Decrescente Lieve", "Decrescente Moderato", "Decrescente Marcato")
+
+# Assicurati che 'classe_trend' sia un factor con l'ordine definito
+pixel_trend$clss_tr <- factor(pixel_trend$clss_tr, levels = custom_order)
+
+library(leaflet.extras)
+
+# Crea la mappa Leaflet
+map <- leaflet() %>%
+  addProviderTiles("Esri.WorldImagery") %>%
+  addPolygons(data = pixel_trend, fillColor = ~color_factor(clss_tr),
+              fillOpacity = 0.6,
+              highlightOptions = highlightOptions(color = "white", weight = 2,
+                                                  bringToFront = TRUE),
+              popup = ~paste("COD:", COD, "<br/>coef:", coef, "<br/>classe:", clss_tr),
+              group = 'pixel_trend',
+              stroke = TRUE,
+              weight = 1
+  ) %>%
+  addLegend(pal = color_factor,
+            values = pixel_trend$clss_tr,
+            title = "NDVI Trend Intensity",
+            opacity = 0.6,
+            position = "topright"
+  ) %>% 
+  addFullscreenControl()
+
+map
+```
+
+```{r, eval=FALSE}
+library(htmlwidgets)
+
+# Salva la mappa
+saveWidget(map, file = "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/map2.html", selfcontained = FALSE)
+```
