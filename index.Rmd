@@ -478,8 +478,8 @@ pixel_trend$clss_tr <- factor(pixel_trend$clss_tr, levels = custom_order)
 library(leaflet.extras)
 
 # Crea la mappa Leaflet
-map <- leaflet() %>%
-  addProviderTiles("Esri.WorldImagery") %>%
+map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
+  addProviderTiles("Esri.WorldImagery", options = providerTileOptions(maxNativeZoom = 18)) %>%
   addPolygons(data = pixel_trend, fillColor = ~color_factor(clss_tr),
               fillOpacity = 0.6,
               highlightOptions = highlightOptions(color = "white", weight = 2,
@@ -495,7 +495,11 @@ map <- leaflet() %>%
             opacity = 0.6,
             position = "topright"
   ) %>% 
-  addFullscreenControl()
+  addFullscreenControl() %>%
+  addLayersControl(
+    overlayGroups = c("Crowns"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
 
 map
 ```
