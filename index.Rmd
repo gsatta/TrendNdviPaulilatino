@@ -145,8 +145,8 @@ shapefile_files <- list.files(shapefile_folder, pattern = ".shp$", full.names = 
 ```{r, eval= FALSE}
 # Iterate through files
 for (i in 1:length(raster_files)) {
-  shp0 <- vect(shapefile_files[7])
-  rast <- terra::rast(raster_files[7])
+  shp0 <- vect(shapefile_files[i])
+  rast <- terra::rast(raster_files[i])
 
   # Extract raster values
   ex <- terra::extract(rast, shp0, method = "simple", exact = TRUE, xy = TRUE, ID = FALSE)
@@ -191,7 +191,7 @@ for (i in 1:length(raster_files)) {
   quadrat_sf$estensione <- NULL 
 
   # Generate output filename based on the shapefile name
-  area_name <- tools::file_path_sans_ext(basename(shapefile_files[7]))
+  area_name <- tools::file_path_sans_ext(basename(shapefile_files[i]))
   output_filename <- file.path(output_folder, paste0(area_name, ".shp"))
 
   # Write output shapefile
@@ -332,6 +332,8 @@ In questa sezione vediamo la tendenza generale dell'NDVI per ogni singola area.
 
 *Possiamo notare che nella zona di Iscala_Erveghe la tendenza dell'NDVI è positiva. Questo potrebbe essere un errore dovuto alla piccola dimensione delle piante di olivastro che si trovano sopra piante di lentisco. I valori di riflettanza rilevati dal satellite, con una risoluzione spaziale di 3 m, quindi sono sogetti alla forte influenza del lentisco.*
 
+In questo grafico è possibile visuallizzare graficamente la tendenza dell'NDVI medio per ogni area su cui è stata effettuata l'analisi. Le tendenze sono state calcolate attraverso la funzione geom_smooth() del pacchetto ggplot2. In particolare è stato utilizzato il metodo lm() \*- Linear Model
+
 ```{r, message=FALSE, warning=FALSE}
 library(ggplot2)
 library(sf)
@@ -455,9 +457,33 @@ pixel_trend <- pixel_trend %>%
 st_write(pixel_trend, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend2.shp")
 ```
 
+```{r, eval=FALSE}
+# Carico il file merged_df per inserire nella mappa i punti campionati
+sample_32632 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/VETTORIALI/DB_sample_vector.shp")
+
+# Assign the CRS of ex_sf to points
+sample_wgs84 <- st_transform(sample_32632, crs = 4326)
+
+# Extract the coordinates using st_coordinates
+coords <- st_coordinates(sample_wgs84$geometry)
+
+# Add the latitude and longitude columns to the merged_sf dataframe
+sample_wgs84$lat <- coords[, 2]
+sample_wgs84$long <- coords[, 1]
+
+st_write(sample_wgs84, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/sample_points.shp", append = FALSE )
+```
+
 ```{r, message=FALSE, warning=FALSE}
+# Carica le librerie necessarielibrary(leaflet)
+library(leaflet.extras)
+library(sf)
+
 # Carico il nuovo file con le classi
 pixel_trend <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend2.shp")
+
+# Carico il file della geolocalizzazione dei campioni
+samples <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/sample_points.shp")
 
 # Define a custom color palette for classes
 class_palette <- c("Crescente" = "#00ff00",  # Green
@@ -475,31 +501,52 @@ custom_order <- c("Crescente", "Stazionario", "Decrescente Lieve", "Decrescente 
 # Assicurati che 'classe_trend' sia un factor con l'ordine definito
 pixel_trend$clss_tr <- factor(pixel_trend$clss_tr, levels = custom_order)
 
-library(leaflet.extras)
+# Crea una funzione di colorazione per i cerchi
+color_factor_circle <- colorFactor(
+  palette = c("green", "red"), 
+  domain = c("+", "-")
+)
 
 # Crea la mappa Leaflet
 map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
   addProviderTiles("Esri.WorldImagery", options = providerTileOptions(maxNativeZoom = 18)) %>%
-  addPolygons(data = pixel_trend, fillColor = ~color_factor(clss_tr),
-              fillOpacity = 0.6,
-              highlightOptions = highlightOptions(color = "white", weight = 2,
-                                                  bringToFront = TRUE),
-              popup = ~paste("COD:", COD, "<br/>coef:", coef, "<br/>classe:", clss_tr),
-              group = 'Crowns',
-              stroke = TRUE,
-              weight = 1
+  addCircleMarkers(data = samples,
+                   lng = ~long,
+                   lat = ~lat,
+                   fillColor = ~color_factor_circle(samples$positivo),
+                   fillOpacity = 0.6,
+                   popup = ~paste("AREA:", location, "<br/>CAMPIONE:", id_sample, "<br/>SINTOMATICO:", sin_asin, "<br/>POSITIVITÀ:", positivo),
+                   radius = 3,
+                   group = 'samples',
+                   stroke = FALSE
   ) %>%
-  addLegend(pal = color_factor,
-            values = pixel_trend$clss_tr,
-            title = "NDVI Trend Intensity",
+  addLegend(pal = color_factor_circle,
+            values = samples$positivo,
+            title = "Sample Positivity",
             opacity = 0.6,
-            position = "topright"
+            position = "bottomright"
   ) %>% 
-  addFullscreenControl() %>%
-  addLayersControl(
-    overlayGroups = c("Crowns"),
-    options = layersControlOptions(collapsed = FALSE)
-  )
+ addPolygons(data = pixel_trend, 
+             fillColor = ~color_factor(clss_tr),
+             fillOpacity = 0.6,
+             highlightOptions = highlightOptions(color = "white", weight = 2,
+                                                 bringToFront = TRUE),
+             popup = ~paste("COD:", COD, "<br/>coef:", coef, "<br/>classe:", clss_tr),
+             group = 'Crowns',
+             stroke = TRUE,
+             weight = 1
+ ) %>%
+ addLegend(pal = color_factor,
+           values = pixel_trend$clss_tr,
+           title = "NDVI Trend Intensity",
+           opacity = 0.6,
+           position = "topright"
+ ) %>% 
+ addFullscreenControl() %>%
+ addLayersControl(
+   overlayGroups = c("Crowns", "samples"),
+   options = layersControlOptions(collapsed = FALSE)
+ )
 
 map
 
