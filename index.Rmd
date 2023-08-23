@@ -246,18 +246,18 @@ long_format_list <- lapply(shp_list, function(shp) {
     ) %>%
     mutate(date = as.Date(date))
 })
-```
 
-Si modifica il nome della colonna `value` in `ndvi` per ogni oggetto sf della lista. Sucessivamente si crea un file unico contente tutti gli oggetti della lista e lo si salva in locale.
-
-```{r, eval = FALSE}
-shapefile_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas"
-
-# Modifica il nome della colonna value in ndvi per ciascun oggetto sf nella lista
+# Modifica il nome della colonna CODICE in COD per ciascun oggetto sf nella lista
 for (i in seq_along(long_format_list)) {
   long_format_list[[i]] <- long_format_list[[i]] %>%
     rename(COD = CODICE_)
 }
+```
+
+S i crea un file unico contente tutti gli oggetti della lista e lo si salva in locale.
+
+```{r, eval = FALSE}
+shapefile_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas"
 
 # Unisci tutti gli oggetti sf nella lista in un unico oggetto sf
 combined_long_format <- bind_rows(long_format_list)
@@ -291,9 +291,11 @@ ndvi_avg_areas <- NDVI_VALUES %>%
 st_write(ndvi_avg_areas, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndvi_avg_areas.shp", append= FALSE)
 ```
 
-```{r, eval = FALSE}
-ndvi_avg_areas1 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndvi_avg_areas.shp")
+------------------------------------------------------------------------
 
+In questa sezione preparo il file con tutti i poligoni delle chiome
+
+```{r, eval = FALSE}
 shapefile_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas"
 
 shapefile_files <- list.files(shapefile_folder, pattern = ".shp$", full.names = TRUE)
@@ -309,21 +311,9 @@ crowns0 <- lapply(crowns0, function(x) {
 
 # Combina i dati
 crowns <- bind_rows(crowns0)
-crowns <- bind_rows(crowns0)
 st_crs(crowns) <- 32632
 
 st_write(crowns, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_merged.shp", append = FALSE)
-
-# Merge the datasets based on date and AREA
-ndvi_avg_areas2 <- ndvi_avg_areas1 %>%
-  st_join(crowns, by = c("date", "AREA")) %>%
-  select(date, AREA = AREA.x, mean_NDVI, ID, CODICE_)
-
-# Set the geometry column from crowns as the active one
-st_geometry(ndvi_avg_areas2) <- "geometry.y"
-
-# Salva l'oggetto sf combinato nel file shapefile
-st_write(ndvi_avg_areas2, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndv_areas2.shp", append= FALSE)
 ```
 
 ------------------------------------------------------------------------
@@ -342,7 +332,7 @@ library(dplyr)
 
 ```{r, message= FALSE, warning=FALSE}
 # Carica il file dei valori dell'ndvi medio per ogni area
-ndvi_avg <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndv_areas2.shp")
+ndvi_avg <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndvi_avg_areas.shp")
 
 # Crea un grafico delle tendenze temporali usando ggplot2 e aggiungi etichette per ciascuna area
 plot <- ggplot(ndvi_avg, aes(x = date, y = mean_NDVI, group = AREA, color = AREA)) +
@@ -369,9 +359,9 @@ library(dplyr)
 
 ```{r, eval = FALSE}
 # Carica i file delle chiome e dei pixel estratti in formato shp
-crowns <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_merged.shp")
+crowns <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_merged.shp", crs = 32632)
 
-NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/NDVI_VALUES.shp")
+NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/NDVI_VALUES.shp", crs = 32632)
 
 # Step 1: Calcola la media di NDVI per ogni data e COD
 ndvi_aggregated <- NDVI_VALUES %>%
@@ -407,7 +397,7 @@ pixel_trend <- pixel_trend %>%
     coef = round(coef, 6)
   )
 
-st_write(pixel_trend, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend.shp")
+st_write(pixel_trend, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend.shp", append= FALSE)
 ```
 
 ------------------------------------------------------------------------
@@ -454,7 +444,7 @@ pixel_trend <- pixel_trend %>%
   ))
 
 # Salvo il file con le classi
-st_write(pixel_trend, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend2.shp")
+st_write(pixel_trend, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend2.shp", append = FALSE)
 ```
 
 ```{r, eval=FALSE}
