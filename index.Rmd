@@ -23,7 +23,7 @@ crowns0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVAST
 # Proietta le feature "crowns"
 crowns <- st_transform(crowns0, crs = "+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs")
 
-# Supponendo che "crowns" sia il tuo oggetto sf
+# Raggruppa per area aggiungi l'ID
 crowns <- crowns %>%
   group_by(AREA) %>%
   mutate(ID = row_number()) %>%
@@ -32,6 +32,16 @@ crowns <- crowns %>%
 
 # Salva l'oggetto sf nel formato Shapefile
 st_write(crowns, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_correct.shp", append = FALSE)
+
+# Dividi l'oggetto crowns per area
+crowns_list <- split(crowns, crowns$AREA)
+
+# Salva un file shp per ogni area
+for (i in seq_along(crowns_list)) {
+  area_name <- names(crowns_list)[i]
+  file_name <- paste0("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas/", area_name, ".shp")
+  st_write(crowns_list[[i]], file_name, append = FALSE)
+}
 ```
 
 Questo è la struttura e la composizione del file crowns.
@@ -41,7 +51,12 @@ crowns <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTR
 ```
 
 ```{r, echo= FALSE}
-crowns
+print(crowns)
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
 ```
 
 ------------------------------------------------------------------------
@@ -86,6 +101,11 @@ cat("Processo completato.")
 
 ```
 
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
 ------------------------------------------------------------------------
 
 ```{r, message=FALSE, warning=FALSE}
@@ -125,6 +145,11 @@ for (i in seq_along(raster_files0)) {
 }
 ```
 
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
 ------------------------------------------------------------------------
 
 In questa sezione vado ad estrarre i pixel che sono situati all'interno, per almeno il 2/3 della loro area, dei poligoni delle chiome. In nuovi file con i pixel estratti saranno in formato shp.
@@ -150,7 +175,7 @@ for (i in 1:length(raster_files)) {
 
   # Extract raster values
   ex <- terra::extract(rast, shp0, method = "simple", exact = TRUE, xy = TRUE, ID = FALSE)
-
+  
   # Convert shp from spatvector to sf object
   shp <- st_as_sf(shp0, crs = 32632)
 
@@ -197,6 +222,11 @@ for (i in 1:length(raster_files)) {
   # Write output shapefile
   st_write(quadrat_sf, output_filename, driver = "ESRI Shapefile", append = FALSE)
 }
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
 ```
 
 ------------------------------------------------------------------------
@@ -269,6 +299,11 @@ output_file3 <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_
 st_write(combined_long_format, output_file3, append= FALSE)
 ```
 
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
 ------------------------------------------------------------------------
 
 In questa sezione si calcola l'NDVI medio per ogni data e area in modo da poter vedere successivamente la tendenza generale dei ogni singola area.
@@ -291,29 +326,9 @@ ndvi_avg_areas <- NDVI_VALUES %>%
 st_write(ndvi_avg_areas, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndvi_avg_areas.shp", append= FALSE)
 ```
 
-------------------------------------------------------------------------
-
-In questa sezione preparo il file con tutti i poligoni delle chiome
-
-```{r, eval = FALSE}
-shapefile_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas"
-
-shapefile_files <- list.files(shapefile_folder, pattern = ".shp$", full.names = TRUE)
-
-# Read and combine all shapefiles
-crowns0 <- lapply(shapefile_files, st_read)
-
-# Modifica il nome della colonna CODice_ in COD
-crowns0 <- lapply(crowns0, function(x) {
-  names(x)[names(x) == "CODICE_"] <- "COD"
-  return(x)
-})
-
-# Combina i dati
-crowns <- bind_rows(crowns0)
-st_crs(crowns) <- 32632
-
-st_write(crowns, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_merged.shp", append = FALSE)
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
 ```
 
 ------------------------------------------------------------------------
@@ -344,6 +359,41 @@ plot <- ggplot(ndvi_avg, aes(x = date, y = mean_NDVI, group = AREA, color = AREA
   theme_minimal()
 
 plot
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+
+In questa sezione preparo il file con tutti i poligoni delle chiome
+
+```{r, eval = FALSE}
+shapefile_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas"
+
+shapefile_files <- list.files(shapefile_folder, pattern = ".shp$", full.names = TRUE)
+
+# Read and combine all shapefiles
+crowns0 <- lapply(shapefile_files, st_read)
+
+# Modifica il nome della colonna CODice_ in COD
+crowns0 <- lapply(crowns0, function(x) {
+  names(x)[names(x) == "CODICE_"] <- "COD"
+  return(x)
+})
+
+# Combina i dati
+crowns <- bind_rows(crowns0)
+st_crs(crowns) <- 32632
+
+st_write(crowns, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_merged.shp", append = FALSE)
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
 ```
 
 ------------------------------------------------------------------------
@@ -379,6 +429,13 @@ cleaned_df <- na.omit(joined_df)
 st_write(cleaned_df, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp", append= FALSE)
 ```
 
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+
 ```{r, eval = FALSE}
 # Carica il nuovo file combinato
 NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp")
@@ -398,6 +455,11 @@ pixel_trend <- pixel_trend %>%
   )
 
 st_write(pixel_trend, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend.shp", append= FALSE)
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
 ```
 
 ------------------------------------------------------------------------
@@ -448,6 +510,13 @@ st_write(pixel_trend, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIV
 ```
 
 ```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+
+```{r, eval=FALSE}
 # Carico il file merged_df per inserire nella mappa i punti campionati
 sample_32632 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/VETTORIALI/DB_sample_vector.shp")
 
@@ -464,6 +533,13 @@ sample_wgs84$long <- coords[, 1]
 st_write(sample_wgs84, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/sample_points.shp", append = FALSE )
 ```
 
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+
 ```{r}
 lim_paul_32632 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/VETTORIALI/Limite_Amministrativo_Paulilatino_EPSG-32632.shp")
 
@@ -472,6 +548,13 @@ lim_paul_wgs84 <- st_transform(lim_paul_32632, crs = 4326)
 
 st_write(lim_paul_wgs84, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/VETTORIALI/Limite_Amministrativo_Paulilatino_wgs84.shp", append = FALSE )
 ```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
 
 ```{r, message=FALSE, warning=FALSE}
 # Carica le librerie necessarielibrary(leaflet)
@@ -566,4 +649,9 @@ library(htmlwidgets)
 
 # Salva la mappa
 saveWidget(map, file = "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/map2.html", selfcontained = FALSE)
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
 ```
