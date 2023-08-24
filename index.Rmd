@@ -4,7 +4,7 @@ output: html_document
 date: "2023-08-22"
 ---
 
-Questo documento riassume il procedimento utilizzato per estrarre i valori dell'NDVI per ogni pixel all'interno dei poligoni delle chiome per almeno i 2/3 della propria area.
+Questo documento riassume il procedimento utilizzato per estrarre i vLalori dell'NDVI per ogni pixel all'interno dei poligoni delle chiome per almeno i 2/3 della propria area.
 
 ```{r, message= FALSE, warning= FALSE}
 library(sf)
