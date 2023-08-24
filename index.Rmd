@@ -473,11 +473,6 @@ library(sf)
 library(quadcleanR)
 ```
 
-```{r, include=FALSE}
-# Imposta l'opzione scipen su un valore elevato per eliminare la notazione esponenziale dei valori
-options(scipen = 999)
-```
-
 ```{r, eval=FALSE}
 # Carico il file de
 pixel_trend0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend.shp")
@@ -549,6 +544,14 @@ lim_paul_wgs84 <- st_transform(lim_paul_32632, crs = 4326)
 st_write(lim_paul_wgs84, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/VETTORIALI/Limite_Amministrativo_Paulilatino_wgs84.shp", append = FALSE )
 ```
 
+```{r}
+focolai0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/FOCOLAI.shp")
+
+focolai <- st_transform(focolai0, crs = 4326)
+
+st_write(focolai, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/FOCOLAI_wgs84.shp", append = FALSE )
+```
+
 ```{r, eval=FALSE}
 # Ripulisci l'enviroment di R
 rm(list=ls())
@@ -562,6 +565,9 @@ library(leaflet.extras)
 library(leaflet)
 library(sf)
 
+# Imposta l'opzione scipen su un valore elevato per eliminare la notazione esponenziale dei valori
+options(scipen = 999)
+
 # Carico il nuovo file con le classi
 pixel_trend <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend2.shp")
 
@@ -569,6 +575,8 @@ pixel_trend <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLI
 samples <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/sample_points.shp")
 
 lim_paul_wgs84 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/VETTORIALI/Limite_Amministrativo_Paulilatino_wgs84.shp")
+
+focolai_wgs84 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/FOCOLAI_wgs84.shp")
 
 
 # Define a custom color palette for classes
@@ -601,6 +609,12 @@ map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
               color = "black", 
               weight = 2,
               group = 'Lim. Amm. Paulilatino'  # Add a group name
+  ) %>% 
+  addPolygons(data = focolai_wgs84,
+              fillOpacity = 0, 
+              color = "red", 
+              weight = 2,
+              group = 'Outbreaks'
   ) %>% 
   addCircleMarkers(data = samples,
                    lng = ~long,
@@ -637,7 +651,7 @@ map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
   ) %>% 
   addFullscreenControl() %>%
   addLayersControl(
-    overlayGroups = c("Crowns", "samples", "Lim. Amm. Paulilatino"),  # Add the new group
+    overlayGroups = c("Crowns", "samples", "Lim. Amm. Paulilatino", "Outbreaks"),  # Add the new group
     options = layersControlOptions(collapsed = TRUE)
   )
 
