@@ -1,10 +1,16 @@
+```{r, echo= FALSE}
+library(prettydoc) 
+```
+
 ---
 title: "NDVI Trend Analysis Paulilatino"
-output: html_document
+output: 
+  html_document:
+    theme: readable 
 date: "2023-08-22"
 ---
 
-Questo documento riassume il procedimento utilizzato per estrarre i vLalori dell'NDVI per ogni pixel all'interno dei poligoni delle chiome per almeno i 2/3 della propria area.
+Questo documento riassume il procedimento utilizzato per estrarre i vLalori dell'NDVI per ogni pixel all'interno dei poligoni delle chiome per almeno i 2/3 della propria area. e analizzare il trend dell'NDVI per ogni chioma delineata di olivastro.
 
 ```{r, message= FALSE, warning= FALSE}
 library(sf)
@@ -343,9 +349,13 @@ In questo grafico è possibile visuallizzare graficamente la tendenza dell'NDVI 
 library(ggplot2)
 library(sf)
 library(dplyr)
+library(ggpubr)
 ```
 
 ```{r, message= FALSE, warning=FALSE}
+# Imposta l'opzione scipen su un valore elevato per eliminare la notazione esponenziale dei valori
+options(scipen = 999)
+
 # Carica il file dei valori dell'ndvi medio per ogni area
 ndvi_avg <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndvi_avg_areas.shp")
 
@@ -359,6 +369,18 @@ plot <- ggplot(ndvi_avg, aes(x = date, y = mean_NDVI, group = AREA, color = AREA
   theme_minimal()
 
 plot
+
+
+```
+
+```{r}
+# Crea un grafico separato per ogni area e visualizza l'equazione della retta di regressione
+ggplot(data = ndvi_avg, aes(x = date, y = mean_NDVI, group = AREA)) +
+  geom_line(aes(color=AREA)) +
+  geom_point(aes(color=AREA)) +
+  facet_wrap(~AREA) + 
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1.2, aes(color=AREA)) +
+  stat_regline_equation(label.y = 1, aes(label = ..eq.label..))
 ```
 
 ```{r, eval=FALSE}
@@ -651,9 +673,18 @@ map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
   ) %>% 
   addFullscreenControl() %>%
   addLayersControl(
-    overlayGroups = c("Crowns", "samples", "Lim. Amm. Paulilatino", "Outbreaks"),  # Add the new group
+    overlayGroups = c("Crowns", "samples", "Lim. Amm. Paulilatino", "Outbreaks"),    # Add the new group
     options = layersControlOptions(collapsed = TRUE)
-  )
+  ) 
+
+# Add the geolocation control
+map <- activateGPS(map) %>%  
+
+addControlGPS(
+options= gpsOptions(
+  position="topleft",
+  autoCenter=TRUE,
+))
 
 map
 ```
