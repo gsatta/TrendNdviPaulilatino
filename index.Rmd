@@ -20,8 +20,6 @@ library(raster)
 
 ```{r, eval=FALSE}
 # Carica i file necessari all'elaborazione
-ndvi <- brick("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/MODELLO/RASTER/ndvi_merged.tif")
-
 crowns0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI.shp")
 ```
 
@@ -132,15 +130,15 @@ raster_files0 <- list.files(raster_folder0, pattern = ".tif$", full.names = TRUE
 
 output_folder0 <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/RASTER/NDVI_CLIPPED_NEW"
 
-date <- read_csv("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/MODELLO/CSV/merged_df.csv")
+date <- read_csv("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/date.csv", col_names = TRUE)
 ```
 
 ```{r, eval=FALSE}
 # Seleziono e creo un nuovo file con le date
 dates <- unique(date$date)
 
-# Estrarre la data
-year_month <- unique(date$date)
+# Estrai l'anno e il mese e crea il formato "YYYY-MM-DD"
+year_month <- paste(substr(dates, 7, 10), substr(dates, 4, 5), sep = "-", substr(dates, 1, 2))
 
 # Itera attraverso i file raster e rinomina i layer con le date
 for (i in seq_along(raster_files0)) {
@@ -220,6 +218,9 @@ for (i in 1:length(raster_files)) {
   
   # Elimina la colonna estensione
   quadrat_sf$estensione <- NULL 
+  
+  # Rename columns to remove the "X" prefix
+  colnames(quadrat_sf) <- gsub("^X", "", colnames(quadrat_sf))
 
   # Generate output filename based on the shapefile name
   area_name <- tools::file_path_sans_ext(basename(shapefile_files[i]))
@@ -583,6 +584,7 @@ rm(list=ls())
 
 ```{r, message=FALSE, warning=FALSE}
 # Carica le librerie necessarielibrary(leaflet)
+library(dplyr)
 library(leaflet.extras)
 library(leaflet)
 library(sf)
@@ -625,7 +627,7 @@ color_factor_circle <- colorFactor(
 
 # Crea la mappa Leaflet
 map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
-  addProviderTiles("Esri.WorldImagery", options = providerTileOptions(maxNativeZoom = 18)) %>%
+  addProviderTiles("Esri.WorldImagery", group = "Imagery", options = providerTileOptions()) %>%
   addPolygons(data = lim_paul_wgs84, 
               fillOpacity = 0, 
               color = "black", 
@@ -665,9 +667,9 @@ map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
               stroke = TRUE,
               weight = 1
   ) %>%
-  addLegend(pal = color_factor,
+  addLegend(title = "Trend: lm(NDVI ~ Month)",
+            pal = color_factor,
             values = pixel_trend$clss_tr,
-            title = "NDVI Trend Intensity",
             opacity = 0.6,
             position = "topright"
   ) %>% 
