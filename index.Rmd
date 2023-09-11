@@ -258,10 +258,11 @@ shp_list <- lapply(INPUT_shp, st_read)
 # Estrai la data e rinomina le colonne
 for (i in seq_along(shp_list)) {
   col_names <- colnames(shp_list[[i]])
-  date_cols <- grep("^X\\d{4}\\.\\d{2}\\.\\d{2}$", col_names)  # Modifica il pattern in base al formato effettivo della data
+  col_names <- gsub("^X", "", col_names)
+  date_cols <- grep("^\\d{4}\\.\\d{2}\\.\\d{2}$", col_names)
   
-  new_col_names <- gsub("^X(\\d{4})\\.(\\d{2})\\.(\\d{2})$", "\\1-\\2-\\3", col_names[date_cols])
-  colnames(shp_list[[i]])[date_cols] <- new_col_names
+  # Rinomina le colonne con le date estratte
+  colnames(shp_list[[i]])[date_cols] <- col_names[date_cols]
   
   # Aggiungi la colonna con il nome del file di origine
   shp_list[[i]]$file_name <- tools::file_path_sans_ext(basename(INPUT_shp[i]))
@@ -281,7 +282,7 @@ long_format_list <- lapply(shp_list, function(shp) {
       names_to = "date",
       values_to = "ndvi"
     ) %>%
-    mutate(date = as.Date(date))
+mutate(date = as.Date(date, format = "%Y.%m.%d"))
 })
 
 # Modifica il nome della colonna CODICE in COD per ciascun oggetto sf nella lista
@@ -518,9 +519,9 @@ pixel_trend <- pixel_trend %>%
   mutate(classe_trend = case_when(
     coef < breaks[[1]] + 0.000009 ~ "Decrescente Marcato",
     coef >= breaks[[1]] + 0.000009 & coef <= breaks[[2]] ~ "Decrescente Moderato",
-    coef > breaks[[2]] & coef <= breaks[[3]] ~ "Decrescente Lieve",
-    coef > breaks[[3]] & coef <= breaks[[4]] ~ "Stazionario",
-    coef > breaks[[4]] ~ "Crescente"
+    coef > breaks[[2]] & coef < breaks[[3]] + 0.000016 ~ "Decrescente Lieve",
+    coef >= breaks[[3]] + 0.000016 & coef <= breaks[[4]] + 0.000012 ~ "Stazionario",
+    coef > breaks[[4]] + 0.000011 ~ "Crescente"
   ))
 
 # Salvo il file con le classi
