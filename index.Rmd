@@ -565,7 +565,7 @@ rm(list=ls())
 
 ------------------------------------------------------------------------
 
-```{r}
+```{r, eval=FALSE}
 lim_paul_32632 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/VETTORIALI/Limite_Amministrativo_Paulilatino_EPSG-32632.shp")
 
 # Assign the CRS of ex_sf to points
@@ -574,12 +574,20 @@ lim_paul_wgs84 <- st_transform(lim_paul_32632, crs = 4326)
 st_write(lim_paul_wgs84, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/VETTORIALI/Limite_Amministrativo_Paulilatino_wgs84.shp", append = FALSE )
 ```
 
-```{r}
+```{r, eval=FALSE}
 focolai0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/FOCOLAI.shp")
 
 focolai <- st_transform(focolai0, crs = 4326)
 
 st_write(focolai, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/FOCOLAI_wgs84.shp", append = FALSE )
+```
+```{r, eval=FALSE}
+plots <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/BUFFER_ANALISI_NDVI.shp")
+
+# Assign the CRS of ex_sf to points
+plots <- st_transform(plots, crs = 4326)
+
+st_write(plots, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/BUFFER_ANALISI_NDVI_WGS84.shp")
 ```
 
 ```{r, eval=FALSE}
@@ -644,6 +652,8 @@ lim_paul_wgs84 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/
 
 focolai_wgs84 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/FOCOLAI_wgs84.shp")
 
+plots_wgs84 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/BUFFER_ANALISI_NDVI_WGS84.shp")
+
 
 # Define a custom color palette for classes
 class_palette <- c("Crescente" = "#00ff00",  # Green
@@ -682,6 +692,12 @@ map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
               weight = 2,
               group = 'Outbreaks'
   ) %>% 
+  addPolygons(data = plots_wgs84,
+              fillOpacity = 0, 
+              color = "yellow", 
+              weight = 2,
+              group = 'plots'
+  ) %>% 
   addCircleMarkers(data = samples,
                    lng = ~long,
                    lat = ~lat,
@@ -717,7 +733,7 @@ map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
   ) %>% 
   addFullscreenControl() %>%
   addLayersControl(
-    overlayGroups = c("Crowns", "samples", "Lim. Amm. Paulilatino", "Outbreaks"),    # Add the new group
+    overlayGroups = c("Crowns", "samples", "Lim. Amm. Paulilatino", "Outbreaks","plots"),    # Add the new group
     options = layersControlOptions(collapsed = TRUE)
   ) 
 
