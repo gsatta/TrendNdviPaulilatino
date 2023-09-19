@@ -20,7 +20,7 @@ library(raster)
 
 ```{r, eval=FALSE}
 # Carica i file necessari all'elaborazione
-crowns0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI.shp")
+crowns0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_2.shp")
 ```
 
 ```{r, eval=FALSE}
@@ -35,7 +35,7 @@ crowns <- crowns %>%
   mutate(CODICE_UNIVOCO = paste(AREA, ID, sep = "_"))
 
 # Salva l'oggetto sf nel formato Shapefile
-st_write(crowns, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_correct.shp", append = FALSE)
+st_write(crowns, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_2_correct.shp", append = FALSE)
 
 # Dividi l'oggetto crowns per area
 crowns_list <- split(crowns, crowns$AREA)
@@ -51,7 +51,7 @@ for (i in seq_along(crowns_list)) {
 Questo è la struttura e la composizione del file crowns.
 
 ```{r, include=FALSE}
-crowns <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_correct.shp")
+crowns <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_2_correct.shp")
 ```
 
 ```{r, echo= FALSE}
@@ -72,7 +72,7 @@ In questa sezione viene ritagliato il raster multilayer ndvi sulla base dell'est
 ndvi <- terra::rast("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/MODELLO/RASTER/ndvi_merged.tif")
 
 # Carica il file SHP dei poligoni
-crowns <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_correct.shp")
+crowns <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_2_correct.shp")
 
 # Imposta la cartella di output
 output_folder <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/RASTER/NDVI_CLIPPED"
@@ -276,7 +276,7 @@ cols_to_exclude <- c("ID", "file_name")
 
 long_format_list <- lapply(shp_list, function(shp) {
   shp %>%
-    select(-one_of(cols_to_exclude)) %>%
+    dplyr::select(-one_of(cols_to_exclude)) %>%
     pivot_longer(
       cols = -c(geometry, CODICE_, AREA),  # Include anche la colonna "geometry"
       names_to = "date",
@@ -285,6 +285,7 @@ long_format_list <- lapply(shp_list, function(shp) {
 mutate(date = as.Date(date, format = "%Y.%m.%d"))
 })
 
+
 # Modifica il nome della colonna CODICE in COD per ciascun oggetto sf nella lista
 for (i in seq_along(long_format_list)) {
   long_format_list[[i]] <- long_format_list[[i]] %>%
@@ -292,7 +293,7 @@ for (i in seq_along(long_format_list)) {
 }
 ```
 
-S i crea un file unico contente tutti gli oggetti della lista e lo si salva in locale.
+Si crea un file unico contente tutti gli oggetti della lista e lo si salva in locale.
 
 ```{r, eval = FALSE}
 shapefile_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas"
@@ -444,13 +445,18 @@ ndvi_aggregated <- NDVI_VALUES %>%
 
 # Effettua il join in base alla colonna COD
 joined_df <- crowns %>%
-  st_join(ndvi_aggregated %>% select(geometry, date, ndvi), by = "COD")
+  st_join(ndvi_aggregated %>% dplyr::select(geometry, date, ndvi), by = "COD")
 
 # Rimuovi le righe con valori NA
 cleaned_df <- na.omit(joined_df)
 
+# Filtra i dati in modo che ogni COD abbia esattamente 68 righe
+filtered_df <- cleaned_df %>%
+  group_by(COD) %>%
+  slice(1:68)
+
 # Salva l'oggetto sf combinato nel file shapefile
-st_write(cleaned_df, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp", append= FALSE)
+st_write(filtered_df, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp", append= FALSE)
 ```
 
 ```{r, eval=FALSE}
@@ -574,6 +580,41 @@ focolai0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVAS
 focolai <- st_transform(focolai0, crs = 4326)
 
 st_write(focolai, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/FOCOLAI_wgs84.shp", append = FALSE )
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+
+In questo chunk cerco di creare una serie temproale di NDVI per ogni albero
+
+```{r}
+
+# # Carica il nuovo file combinato
+# NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp")
+# 
+# # Eseguire il codice per ogni valore unico di COD
+# unique_cod <- unique(NDVI_VALUES$COD)
+# 
+# # Creare una funzione per applicare il codice a un valore specifico di COD
+# applyCodeToCOD <- function(cod) {
+#   subset_data <- NDVI_VALUES[NDVI_VALUES$COD == cod, ]
+#   
+#   # Calcolare la serie temporale e applicare il filtro
+#   ts <- ts(subset_data$ndvi, start = c(2018, 1), end = c(2023, 8), frequency = 12)
+#   ts13 <- stats::filter(ts, rep(1, 12) / 12)
+#   
+#   # Creare un grafico per il valore specifico di COD
+#   plot(ts, type = "p")
+#   lines(ts13, lwd = 2, col = "red")
+# }
+# 
+# # Applicare la funzione a ciascun valore unico di COD
+# sapply(unique_cod, applyCodeToCOD)
+
 ```
 
 ```{r, eval=FALSE}
