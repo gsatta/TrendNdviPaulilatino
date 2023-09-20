@@ -353,6 +353,7 @@ library(ggplot2)
 library(sf)
 library(dplyr)
 library(ggpubr)
+library(RColorBrewer)
 ```
 
 ```{r, message= FALSE, warning=FALSE}
@@ -362,17 +363,20 @@ options(scipen = 999)
 # Carica il file dei valori dell'ndvi medio per ogni area
 ndvi_avg <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndvi_avg_areas.shp")
 
-# Crea un grafico delle tendenze temporali usando ggplot2 e aggiungi etichette per ciascuna area
+# Creazione di una palette personalizzata
+my_palette <- c(brewer.pal(8, "Set1"), brewer.pal(8, "Set2"), brewer.pal(8, "Set3"))
+my_palette <- my_palette[1:13]  # Seleziona solo i primi 13 colori
+
+# Utilizzo della palette personalizzata in ggplot
 plot <- ggplot(ndvi_avg, aes(x = date, y = mean_NDVI, group = AREA, color = AREA)) +
   geom_smooth(method = "lm", se = FALSE, linewidth = 1.2) +
-  scale_color_brewer(palette = "Set3") +
+  scale_color_manual(values = my_palette) +
   labs(title = "Tendenze temporali dell'NDVI per ciascuna area",
        x = "Date",
        y = "NDVI") +
   theme_minimal()
 
 plot
-
 
 ```
 
@@ -606,69 +610,69 @@ rm(list=ls())
 NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp")
 ```
 
-```{r, eval=FALSE}
-# Imposta l'opzione scipen su un valore elevato per eliminare la notazione esponenziale dei valori
-options(scipen = 999)
-
-# Ottieni l'elenco unico dei COD
-cod_list <- unique(NDVI_VALUES$COD)
-
-# Inizializza una lista per memorizzare i risultati
-results_sg <- data.frame()
-
-# Crea una nuova barra di avanzamento
-pb <- progress_bar$new(total = length(cod_list))
-
-# Esegui il ciclo for su ogni COD
-for (cod in cod_list) {
-  # Seleziona i dati per il COD corrente
-  data0 <- NDVI_VALUES[NDVI_VALUES$COD == cod, ]
-  
-  # Crea un nuovo dataframe con le righe tra ottobre e Maggio
-  data0_oct_may <- data0 %>% 
-    filter(month(date) >= 10 | month(date) <= 5)
-  
-  # Calcola la somma dei valori NDVI per ogni anno
-  sg_values <- data0_oct_may %>%
-    group_by(year = year(date)) %>%
-    summarise(sg = sum(ndvi))
-  
-  # Adatta una regressione lineare ai valori annuali di SG
-  sg_trend <- lm(sg ~ year, data = sg_values)
-  
-  # Estrai il coefficiente angolare (a) e l'intercetta (b) dal modello
-  a <- coef(sg_trend)["slope"]
-  b <- coef(sg_trend)["(Intercept)"]
-  
-  # Equazione della linea di regressione
-  eq = paste0(" slope = ", round(a, 8))
-  
-   # Esegui il test di Mann-Kendall
-  mk_result <- mk.test(sg_values$sg)
-  
-  # Estrai il valore p dal risultato del test
-  mk_p_value <- mk_result$p.value
-  
-  # Aggiungi i risultati al dataframe
-  results_sg <- rbind(results_sg, data.frame(COD = cod, mk_p_value = mk_p_value))
-  
-  # Rimuovi i nomi delle righe
-  rownames(results_sg) <- NULL
-
-  # Aggiorna la barra di avanzamento solo se non ha raggiunto il limite
-  if (!pb$finished) {
-    pb$tick()
-  }
-}
-
-# Aggiungi una nuova colonna per la classe di tendenza
-results_sg <- results_sg %>%
-  mutate(Trend_Class = case_when(
-    mk_p_value > 0.05 ~ 0,
-    mk_p_value > 0.01 ~ 1,
-    mk_p_value > 0.001 ~ 2,
-    TRUE ~ 3
-  ))
+```{r, include = FALSE, eval=FALSE}
+# # Imposta l'opzione scipen su un valore elevato per eliminare la notazione esponenziale dei valori
+# options(scipen = 999)
+# 
+# # Ottieni l'elenco unico dei COD
+# cod_list <- unique(NDVI_VALUES$COD)
+# 
+# # Inizializza una lista per memorizzare i risultati
+# results_sg <- data.frame()
+# 
+# # Crea una nuova barra di avanzamento
+# pb <- progress_bar$new(total = length(cod_list))
+# 
+# # Esegui il ciclo for su ogni COD
+# for (cod in cod_list) {
+#   # Seleziona i dati per il COD corrente
+#   data0 <- NDVI_VALUES[NDVI_VALUES$COD == cod, ]
+#   
+#   # Crea un nuovo dataframe con le righe tra ottobre e Maggio
+#   data0_oct_may <- data0 %>% 
+#     filter(month(date) >= 10 | month(date) <= 5)
+#   
+#   # Calcola la somma dei valori NDVI per ogni anno
+#   sg_values <- data0_oct_may %>%
+#     group_by(year = year(date)) %>%
+#     summarise(sg = sum(ndvi))
+#   
+#   # Adatta una regressione lineare ai valori annuali di SG
+#   sg_trend <- lm(sg ~ year, data = sg_values)
+#   
+#   # Estrai il coefficiente angolare (a) e l'intercetta (b) dal modello
+#   a <- coef(sg_trend)["slope"]
+#   b <- coef(sg_trend)["(Intercept)"]
+#   
+#   # Equazione della linea di regressione
+#   eq = paste0(" slope = ", round(a, 8))
+#   
+#    # Esegui il test di Mann-Kendall
+#   mk_result <- mk.test(sg_values$sg)
+#   
+#   # Estrai il valore p dal risultato del test
+#   mk_p_value <- mk_result$p.value
+#   
+#   # Aggiungi i risultati al dataframe
+#   results_sg <- rbind(results_sg, data.frame(COD = cod, mk_p_value = mk_p_value))
+#   
+#   # Rimuovi i nomi delle righe
+#   rownames(results_sg) <- NULL
+# 
+#   # Aggiorna la barra di avanzamento solo se non ha raggiunto il limite
+#   if (!pb$finished) {
+#     pb$tick()
+#   }
+# }
+# 
+# # Aggiungi una nuova colonna per la classe di tendenza
+# results_sg <- results_sg %>%
+#   mutate(Trend_Class = case_when(
+#     mk_p_value > 0.05 ~ 0,
+#     mk_p_value > 0.01 ~ 1,
+#     mk_p_value > 0.001 ~ 2,
+#     TRUE ~ 3
+#   ))
 ```
 
 ```{r, eval=FALSE}
@@ -761,7 +765,6 @@ saveRDS(results_list, file = "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGET
 ```
 
 ```{r, eval = FALSE}
-
 results_list <- readRDS("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/SCRIPT/TrendNdviPaulilatino/Risultati/results_list.rds")
 
 # Inizializza un data frame vuoto
@@ -938,7 +941,7 @@ plots <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO
 # Assign the CRS of ex_sf to points
 plots <- st_transform(plots, crs = 4326)
 
-st_write(plots, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/BUFFER_ANALISI_NDVI_WGS84.shp")
+st_write(plots, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/BUFFER_ANALISI_NDVI_WGS84.shp", append = TRUE)
 ```
 
 ```{r, eval=FALSE}
