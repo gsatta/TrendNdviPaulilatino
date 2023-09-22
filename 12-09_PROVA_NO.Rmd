@@ -1,0 +1,170 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+```{r}
+library(leaflet)
+library(htmlwidgets)
+library(plotly)
+library(leaflet.extras)
+library(dplyr)
+library(sf)
+library(htmltools)  # Assicurati di caricare il pacchetto htmltools
+library(leafpop)
+library(gridExtra)
+library(stats)
+
+# Carica il nuovo file combinato
+NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp")
+
+# Imposta l'opzione scipen su un valore elevato per eliminare la notazione esponenziale dei valori
+options(scipen = 999)
+
+# Carico il nuovo file con le classi
+pixel_trend <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend2.shp")
+# Carico il file della geolocalizzazione dei campioni
+samples <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/sample_points.shp")
+lim_paul_wgs84 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/VETTORIALI/Limite_Amministrativo_Paulilatino_wgs84.shp")
+
+focolai_wgs84 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/FOCOLAI_wgs84.shp")
+
+# Define a custom color palette for classes
+class_palette <- c("Crescente" = "#00ff00",  # Green
+                   "Stazionario" = "#adff2f",  # Yellow-green
+                   "Decrescente Lieve" = "yellow",
+                   "Decrescente Moderato" = "orange",
+                   "Decrescente Marcato" = "red")
+
+# Create a color factor with the custom palette and class labels
+color_factor <- leaflet::colorFactor(palette = class_palette, levels = c("Crescente", "Stazionario", "Decrescente Lieve", "Decrescente Moderato", "Decrescente Marcato"))
+
+# Definisci l'ordine desiderato delle etichette delle classi
+custom_order <- c("Crescente", "Stazionario", "Decrescente Lieve", "Decrescente Moderato", "Decrescente Marcato")
+
+# Assicurati che 'classe_trend' sia un factor con l'ordine definito
+pixel_trend$clss_tr <- factor(pixel_trend$clss_tr, levels = custom_order)
+
+# Crea una funzione di colorazione per i cerchi
+color_factor_circle <- colorFactor(
+  palette = c("green", "red"), 
+  domain = c("+", "-")
+)
+
+# Ottieni i valori unici di COD
+cod_values <- unique(NDVI_VALUES$COD)
+
+# Funzione per creare il codice HTML del grafico
+crea_grafico_html <- function(cod) {
+  # Filtra i dati per il valore corrente di COD
+  dati <- NDVI_VALUES[NDVI_VALUES$COD == cod, ]
+  
+  # Crea la serie temporale
+  serie_temporale <- ts(dati$ndvi, start = c(2018, 1), end = c(2023, 8), frequency = 12)
+  
+  # Crea il grafico con plot.ts
+  png(filename="temp.png")
+  plot.ts(serie_temporale, main=cod, ylab='NDVI')
+  lines(smooth.spline(time(serie_temporale), serie_temporale)$y, col = "blue") # n/100 for seasonal component
+  lines(supsmu(time(serie_temporale), serie_temporale, span=0.5)$y, col = "red") # n/2 for trend component
+  dev.off()
+  
+  # Leggi l'immagine e codificala in base64
+  img <- base64enc::dataURI(file = "temp.png", mime = "image/png")
+  
+  # Rimuovi il file temporaneo
+  file.remove("temp.png")
+  
+  # Ritorna il codice HTML dell'immagine
+  return(paste0('<img src="', img, '"/>'))
+}
+
+# Crea la mappa Leaflet
+map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
+  addProviderTiles("Esri.WorldImagery", group = "Imagery", options = providerTileOptions()) %>%
+  addPolygons(data = lim_paul_wgs84, 
+              fillOpacity = 0, 
+              color = "black", 
+              weight = 2,
+              group = 'Lim. Amm. Paulilatino'  # Add a group name
+  ) %>% 
+  addPolygons(data = focolai_wgs84,
+              fillOpacity = 0, 
+              color = "red", 
+              weight = 2,
+              group = 'Outbreaks'
+  ) %>% 
+  addCircleMarkers(data = samples,
+                   lng = ~long,
+                   lat = ~lat,
+                   fillColor = ~color_factor_circle(samples$positivo),
+                   fillOpacity = 0.6,
+                   popup = ~paste("AREA:", location, "<br/>CAMPIONE:", id_sample, "<br/>SINTOMATICO:", sin_asin, "<br/>POSITIVITÀ:", positivo),
+                   radius = 3,
+                   group = 'samples',
+                   stroke = FALSE
+  ) %>%
+  addLegend(pal = color_factor_circle,
+            values = samples$positivo,
+            title = "Sample Positivity",
+            opacity = 0.6,
+            position = "bottomright"
+  ) %>% 
+  addPolygons(data = pixel_trend, 
+              fillColor = ~color_factor(clss_tr),
+              color = "black",
+              fillOpacity = 0.6,
+              highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE),
+              popup =~paste(
+                "COD:", COD, "<br/>coef:", coef, "<br/>classe:", clss_tr),
+              group ='Crowns',
+              stroke=TRUE,
+              weight=1
+  ) %>%
+  addLegend(title="Trend: lm(NDVI ~ Month)",
+            pal=color_factor,
+            values=pixel_trend$clss_tr,
+            opacity=0.6,
+            position="topright"
+  ) %>% 
+  addFullscreenControl() %>%
+  addLayersControl(
+    overlayGroups=c("Crowns","samples","Lim. Amm. Paulilatino","Outbreaks"),    
+    options=layersControlOptions(collapsed=TRUE)
+  ) 
+
+# Add the geolocation control
+map <- activateGPS(map) %>%  
+  addControlGPS(
+    options=gpsOptions(
+      position="topleft",
+      autoCenter=TRUE,
+    ))
+
+# Aggiungi i popup con i grafici alla mappa Leaflet
+for (i in seq_along(cod_values)) {
+  cod <- cod_values[i]
+  
+  # Filtra i dati di NDVI_VALUES per il valore corrente di COD
+  NDVI_VALUES_cod <- NDVI_VALUES[NDVI_VALUES$COD == cod, ]
+  
+  lng <- st_coordinates(NDVI_VALUES_cod$geometry)[, 1]
+  lat <- st_coordinates(NDVI_VALUES_cod$geometry)[, 2]
+  
+  # Crea il popup con il grafico HTML
+  html <- crea_grafico_html(cod)
+  
+  # Aggiungi il popup al marker sulla mappa
+  map <- addMarkers(map, lng = lng, lat = lat, popup = html)
+}
+
+map
+
+# Salva la mappa
+saveWidget(map, file = "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/map3_prova.html", selfcontained = FALSE)
+
+
+
+```
+

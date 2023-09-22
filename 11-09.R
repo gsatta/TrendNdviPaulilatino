@@ -1,13 +1,14 @@
 library(sf)
+library(stats)
 
 # Carica il nuovo file combinato
 NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp")
 
-data <- NDVI_VALUES[NDVI_VALUES$COD == 'PONTE_EZZU_18', ]
+data <- NDVI_VALUES[NDVI_VALUES$COD == 'ORTERI1_61', ]
 
 ts <- ts(data$ndvi, start = c(2018, 1), end = c(2023, 8), frequency = 12)
 
-ts13<- filter(ts, rep(1,12)/12)
+ts13<- stats::filter(ts, rep(1,12)/12)
 
 plot(ts, type = "p")
 lines(ts13, lwd=2, col = "red")
