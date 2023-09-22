@@ -7,9 +7,8 @@ title: "NDVI Trend Analysis Paulilatino"
 output: 
   html_document:
     theme: readable 
-date: "2023-08-22"
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
 ---
-
 Questo documento riassume il procedimento utilizzato per estrarre i vLalori dell'NDVI per ogni pixel all'interno dei poligoni delle chiome per almeno i 2/3 della propria area. e analizzare il trend dell'NDVI per ogni chioma delineata di olivastro.
 
 ```{r, message= FALSE, warning= FALSE}
@@ -686,6 +685,7 @@ cod_list <- unique(NDVI_VALUES$COD)
 results_list <- list()
 
 # Crea una nuova barra di avanzamento
+
 pb <- progress_bar$new(total = length(cod_list))
 
 # Esegui il ciclo for su ogni COD
@@ -695,19 +695,27 @@ for (cod in cod_list) {
   
   ts <- ts(data0$ndvi, start = c(2018, 1), end = c(2023, 8), frequency = 12)
   fit <- lm(ndvi ~ date, data = data0)
-
+  
   # Esegui il test non parametrico di Mann-Kendall (MK)
   mk_test <- smk.test(ts)
-
+  
+  pettitt_test <- pettitt.test(ts)
+  
+  valore_K <- unname(pettitt_test$estimate)
+  
   # Converti le date in numeri (numero di giorni dalla data minima)
   data0$date_numeric <- as.numeric(data0$date - min(data0$date))
-
+  
   # Calcola Theil-Sen's slope (Q) utilizzando la data numerica
-  theil_sen_fit <- mblm(ndvi ~ date_numeric, data = data0)
+  # theil_sen_fit <- mblm(ndvi ~ date_numeric, data = data0)
+  
+  theil_sen_fit <- theil_sen_regression(ndvi ~ date, data = data0)
   
   # Estrazione della pendenza e l'intercetta
   slope_mblm <- theil_sen_fit$coefficients[2]
   intercept_mblm <- theil_sen_fit$coefficients[1]
+  
+  eq_theil = paste0(" slope = ", round(slope_mblm, 8))
   
   # Estrai Q
   Q <- coef(theil_sen_fit)[2]
@@ -721,7 +729,7 @@ for (cod in cod_list) {
   # Equazione della linea di regressione
   eq = paste0(" slope = ", round(slope, 8))
   
-  dbest_analysis <- DBEST::DBEST(data = ts, data.type = "cyclical", algorithm = "change detection", breakpoints.no= 10, first.level.shift= 0.1, second.level.shift=0.2, duration=12, distance.threshold="default", alpha=0.05, plot="on" )
+  dbest_analysis <- DBEST::DBEST(data = ts, data.type = "cyclical", algorithm = "change detection", breakpoints.no= 10, first.level.shift= 0.1, second.level.shift=0.2, duration=12, distance.threshold="default", alpha=0.05, plot="off" )
   
   trend_dbest <- dbest_analysis$Fit
   
@@ -730,17 +738,17 @@ for (cod in cod_list) {
   
   trend_df$date <- data0$date
   
+  min_date <- min(data0$date)
+  max_date <- max(data0$date)
+  
   # Imposta i margini del grafico
   par(mar = c(5, 4.5, 4, 1),  mfrow = c(1,1))
   
   # Crea il grafico di dispersione dei dati
-  plot(data0$date,data0$ndvi, type = "p", xlab = "Date", ylab = "NDVI values")
-  
-  # Sovrapponi la linea retta basata sui coefficienti del modello di regressione
-  abline(a = intercept, b = slope, col = "red")
+  plot(data0$date, data0$ndvi, type = "p", xlab = "Date", ylab = "NDVI values", xlim = c(min_date, max_date))
   
   # Sovrapponi la linea retta basata sui coeficienti del modello di Theil-Sen 
-  abline(intercept_mblm, slope_mblm, col= "orange")
+  abline(theil_sen_fit, col= "red")
   
   # Linea di tendenza 1 (colore blu)
   lines(smooth.spline(data0$date, data0$ndvi), col = "blue")
@@ -750,16 +758,17 @@ for (cod in cod_list) {
   
   # Aggiungi il titolo e il sottotitolo
   title(main = area)
-  mtext(eq, side = 3, line = 0.3)
-
-    # Salva i risultati e il grafico nella lista
-  results_list[[cod]] <- list(intercept = intercept, slope = slope, area = area, plot = recordPlot(), mk = mk_test)
+  mtext(eq_theil, side = 3, line = 0.3)
+  
+  # Salva i risultati e il grafico nella lista
+  results_list[[cod]] <- list(intercept_mblm = intercept_mblm, slope_mblm = slope_mblm, area = area, plot = recordPlot(), mk = mk_test, valore_K = valore_K )
   
   # Aggiorna la barra di avanzamento solo se non ha raggiunto il limite
   if (!pb$finished) {
     pb$tick()
   }
 }
+
 
 saveRDS(results_list, file = "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/SCRIPT/TrendNdviPaulilatino/Risultati/results_list.rds")
 ```
@@ -778,8 +787,9 @@ for(i in 1:length(results_list)) {
   # Estrai i valori di area, intercept e slope
   COD <- results_list[[i]]$area
   intercept <- results_list[[i]]$intercept
-  slope <- results_list[[i]]$slope
+  slope <- results_list[[i]]$slope_mblm
   mk_p_value <- results_list[[i]]$mk$p.value
+  k_value <- results_list[[i]]$valore_K
   
   # Crea un data frame temporaneo con questi valori
   temp_df <- data.frame(COD = COD, intercept = intercept, slope = slope, mk_p_value = mk_p_value)
@@ -1033,6 +1043,9 @@ color_factor_circle <- colorFactor(
 )
 
 # Crea la mappa Leaflet
+# ...
+
+# Crea la mappa Leaflet
 map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
   addProviderTiles("Esri.WorldImagery", group = "Imagery", options = providerTileOptions()) %>%
   addPolygons(data = lim_paul_wgs84, 
@@ -1068,14 +1081,16 @@ map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
             title = "Sample Positivity",
             opacity = 0.6,
             position = "bottomright"
-  ) %>% 
+  )
+
+# Aggiungi i poligoni con colorazione basata sulla pendenza
+map <- map %>% 
   addPolygons(data = pixel_trend, 
-              fillColor = ~color_factor1(Trnd_Cl),
-              color="black",
+              fillColor = ~ifelse(slope > 0, "#00ff00", color_factor1(Trnd_Cl)),
+              color = "black",
               fillOpacity = 0.6,
-              highlightOptions = highlightOptions(color = "white", weight = 2,
-                                                  bringToFront = TRUE),
-              popup = ~paste("COD:", COD, "<br/>slope:", slope, "<br/>class:", Trnd_Cl, "<br/>Description:", Trnd_Ds ),
+              highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE),
+              popup = ~paste("COD:", COD, "<br/>slope:", slope, "<br/>class:", Trnd_Cl, "<br/>Description:", Trnd_Ds),
               group = 'Crowns',
               stroke = TRUE,
               weight = 1
@@ -1090,17 +1105,9 @@ map <- leaflet(options = leafletOptions(maxZoom = 22)) %>%
   addLayersControl(
     overlayGroups = c("Crowns", "samples", "Lim. Amm. Paulilatino", "Outbreaks","plots"),    # Add the new group
     options = layersControlOptions(collapsed = TRUE)
-  ) 
+  )
 
-# Add the geolocation control
-map <- activateGPS(map) %>%  
-
-addControlGPS(
-options= gpsOptions(
-  position="topleft",
-  autoCenter=TRUE,
-))
-
+# Visualizza la mappa
 map
 ```
 
