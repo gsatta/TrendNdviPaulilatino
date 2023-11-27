@@ -1,0 +1,1237 @@
+---
+title: "NDVI Trend Analysis Paulilatino"
+author: "Gabriele Giuseppe Antonio Satta"
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output: github_document
+---
+This document aims to show the process using R studio for analize and extract the NDVI values for each pixel inside the wild olive crowns polygons. The pixels are form Multispectral PlanetScope images (RGB + NIR bands) whit a resolution of 3 m. The pixel extracted must be inside the crowns polygons at least for 2/3 of of its extension. 
+
+```{r, message= FALSE, warning= FALSE}
+# Load all the necessary packages
+library(sf)
+library(dplyr) 
+library(raster)
+```
+
+```{r, eval=FALSE}
+# Load all the necessary files
+crowns0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_2.shp")
+```
+
+```{r, eval=FALSE}
+# Project the crowns feature
+crowns <- st_transform(crowns0, crs = "+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs")
+
+# Group for AREA and add the ID
+crowns <- crowns %>%
+  group_by(AREA) %>%
+  mutate(ID = row_number()) %>%
+  ungroup() %>%
+  mutate(CODICE_UNIVOCO = paste(AREA, ID, sep = "_"))
+
+# Save the sf objet in Shapefile format
+st_write(crowns, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_2_correct.shp", append = FALSE)
+
+# Split the crowns object by area
+crowns_list <- split(crowns, crowns$AREA)
+
+# Save one shp file for each area
+for (i in seq_along(crowns_list)) {
+  area_name <- names(crowns_list)[i]
+  file_name <- paste0("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas/", area_name, ".shp")
+  st_write(crowns_list[[i]], file_name, append = FALSE)
+}
+```
+
+This is the structure and composition of the crowns file:
+```{r, include=FALSE}
+# Load the NDVI crowns file previously elaborated
+crowns <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_2_correct.shp")
+```
+
+```{r, echo= FALSE}
+# Print the NDVI crowns file
+print(crowns)
+```
+
+```{r, eval=FALSE}
+# Clean the R enviroment
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+In this section the NDVI multilayer raster file is cropped according to the extent of the polygons located in the areas:
+```{r, eval=FALSE}
+# Load the raster multulayer file of the entire area
+ndvi <- terra::rast("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/MODELLO/RASTER/ndvi_merged.tif")
+
+# Load the NDVI crowns file
+crowns <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/CHIOME_ANALISI_NDVI_2_correct.shp")
+
+# set the output folder
+output_folder <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/RASTER/NDVI_CLIPPED"
+```
+
+```{r, eval=FALSE}
+# Find unique area names
+unique_aree <- unique(crowns$AREA)
+
+# Repeat across the areas
+for (area_nome in unique_aree) {
+  area_poligoni <- crowns[crowns$AREA == area_nome, ]
+  
+  # Creates a total extension for polygons in the area
+  area_extent <- st_bbox(area_poligoni)
+  
+  # Crop the raster with the full extent of the area
+  raster_ritagliato <- crop(ndvi, area_extent)
+
+  # Create complete path to save
+  nome_file <- file.path(output_folder, paste(area_nome,"_ndvi", ".tif", sep = ""))
+  
+  # Save the cropped raster with the name of the area
+  terra::writeRaster(raster_ritagliato, nome_file, overwrite = TRUE)
+  
+  cat("Raster cut out and saved for the area:", area_nome, "\n")
+}
+
+cat("Process completed.")
+
+```
+
+```{r, eval=FALSE}
+# Clean the R enviroment
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+```{r, message=FALSE, warning=FALSE}
+# Load the required libraries
+library(sf)
+library(terra)
+library(readr)
+library(dplyr)
+```
+
+In this section the layer of all the raster file are renominated with the satellite images date.
+```{r, eval=FALSE}
+# Set the cropped raster file folder
+raster_folder0  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/RASTER/NDVI_CLIPPED"
+
+# List files in the folders
+raster_files0 <- list.files(raster_folder0, pattern = ".tif$", full.names = TRUE)
+
+# Set the raste file folder
+output_folder0 <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/RASTER/NDVI_CLIPPED_NEW"
+
+# Read the csv file of the satellite images dates
+date <- read_csv("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/date.csv", col_names = TRUE)
+```
+
+
+```{r, eval=FALSE}
+# Select from the csv file and create a new vector file with the dates
+dates <- unique(date$date)
+
+# Extract the year and month with the "YYYY-MM-DD" format
+year_month <- paste(substr(dates, 7, 10), substr(dates, 4, 5), sep = "-", substr(dates, 1, 2))
+
+# Repeat trough raster files and rename the layers with the dates
+for (i in seq_along(raster_files0)) {
+  raster_file <- terra::rast(raster_files0[i]) # load one raster file at a time
+  names(raster_file) <- year_month # Rename the layes of one raster file with the satellite images dates
+  new_filename <- file.path(output_folder0, paste0(basename(raster_files0[i]))) # create  a new file
+  writeRaster(raster_file, filename = new_filename, overwrite = TRUE) # write the new raster file with the new layer names
+}
+```
+
+```{r, eval=FALSE}
+# Clean the R enviroment
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+
+In this section the pixel values from inside, at least for 2/3 of their extension, of the crowns polygons are extracted. The new files are converted in shp format.
+```{r, eval=FALSE}
+# Set the path to the shapefile and raster file
+shapefile_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas"
+raster_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/RASTER/NDVI_CLIPPED_NEW"
+output_folder <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_EXTRACTED"
+```
+
+```{r, eval=FALSE}
+# List files in the folders
+raster_files <- list.files(raster_folder, pattern = ".tif$", full.names = TRUE)
+shapefile_files <- list.files(shapefile_folder, pattern = ".shp$", full.names = TRUE)
+```
+
+```{r, eval= FALSE}
+# Iterate through files
+for (i in 1:length(raster_files)) {
+  shp0 <- vect(shapefile_files[i])
+  rast <- terra::rast(raster_files[i])
+
+  # Extract raster values
+  ex <- terra::extract(rast, shp0, method = "simple", exact = TRUE, xy = TRUE, ID = FALSE)
+  
+  # Convert shp from spatvector to sf object
+  shp <- st_as_sf(shp0, crs = 32632)
+
+  # If you want to convert the area to another unit, you can use the st_transform function
+  shp$estensione <- st_area(st_transform(shp, crs = 32632), square = TRUE) # Change new_crs to the desired coordinate system
+
+  # Filter polygons with at least 2/3 area coverage
+  ex_filtered <- ex[ex$fraction >= (2/3),]
+
+  # Create an sf object from the filtered data
+  ex_sf <- st_as_sf(ex_filtered, coords = c("x", "y"))
+
+  # Assign WGS 84 CRS to your sf object
+  ex_sf <- st_set_crs(ex_sf, 32632)
+
+  # Remove the fraction column (no longer needed now)
+  ex_sf$fraction <- NULL
+
+  # Remove duplicate rows based on all columns
+  ex_sf2 <- distinct(ex_sf)
+
+  # Assign the CRS of ex_sf to polygons
+  polygons <- st_as_sf(shp, st_crs(ex_sf2))
+
+  # Perform spatial join based on the position of ex_sf and polygons
+  sf_join <- st_join(ex_sf2, polygons)
+
+  # Calculate square side length (3 meters)
+  side_length <- 3
+
+  # Create squares using st_buffer
+  quadrat_sf <- st_buffer(sf_join, side_length / 2, endCapStyle = "SQUARE")
+
+  # Set CRS (EPSG:32632)
+  quadrat_sf <- st_set_crs(quadrat_sf, 32632)
+  
+  # Elimina la colonna estensione
+  quadrat_sf$estensione <- NULL 
+  
+  # Rename columns to remove the "X" prefix
+  colnames(quadrat_sf) <- gsub("^X", "", colnames(quadrat_sf))
+
+  # Generate output filename based on the shapefile name
+  area_name <- tools::file_path_sans_ext(basename(shapefile_files[i]))
+  output_filename <- file.path(output_folder, paste0(area_name, ".shp"))
+
+  # Write output shapefile
+  st_write(quadrat_sf, output_filename, driver = "ESRI Shapefile", append = FALSE)
+}
+```
+
+```{r, eval=FALSE}
+# Clean the R enviroment
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+
+In this section each shp file of the extracted pixel inside the crowns for each area are prepared. Specifically, 
+
+
+In questa sezione si preparano i file shp dei pixel estratti per ogni poligono della chioma e area alla sucessive elaborazioni. In particolare, after loading all files as sf objects, extract the dates from the file and rename all columns. This is necessary because the column names do not yet have a date-compatible format. We factor the `AREA` column. The dataset is cleared of columns no longer needed.
+
+```{r, eval = FALSE}
+# Load the necessary packages
+library(sf)
+library(dplyr)
+library(tidyr)
+```
+
+```{r, eval = FALSE}
+# Set the input folder of the extracted ndvi files
+INPUT_folder <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_EXTRACTED"
+
+# Load the  dates csv files
+date <- read_csv("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/date.csv", col_names = TRUE)
+
+# Get the list of SHP files in the folder
+INPUT_shp <- list.files(path = INPUT_folder, pattern = "\\.shp$", full.names = TRUE)
+
+# Caricare tutti i file SHP in una lista di oggetti sf
+shp_list <- lapply(INPUT_shp, st_read)
+
+# Load all SHP files in a list of sf objects
+date_vector <- gsub("-", "", date$date)
+
+# Rename numeric columns with dates
+for (i in seq_along(shp_list)) {
+  num_cols <- which(sapply(shp_list[[i]], is.numeric)) # select the numeric colums
+  num_cols <- num_cols[colnames(shp_list[[i]])[num_cols] != "ID"]   # Exclude 'ID' column
+  colnames(shp_list[[i]])[num_cols] <- date_vector[1:length(num_cols)]
+  
+  # Add column with source file name
+  shp_list[[i]]$file_name <- tools::file_path_sans_ext(basename(INPUT_shp[i]))
+  
+  # Transforms the column 'area' into a factor
+  shp_list[[i]]$AREA <- as.factor(shp_list[[i]]$AREA)
+}
+
+# Rimuovi le  colonne non necessarie
+cols_to_exclude <- c("ID", "file_name")
+
+# Convert the dataframes inside the list in the long format
+long_format_list <- lapply(shp_list, function(shp) {
+  shp %>%
+    dplyr::select(-one_of(cols_to_exclude)) %>%
+    pivot_longer(
+      cols = -c(geometry, CODICE_, AREA),  # Include the "geometry" colum
+      names_to = "date",
+      values_to = "ndvi"
+    ) %>%
+mutate(date = as.Date(date, format = "%Y%m%d"))  
+})
+
+# Change the CODICE colum name in COD for each object sf iside the list.
+for (i in seq_along(long_format_list)) {
+  long_format_list[[i]] <- long_format_list[[i]] %>%
+    rename(COD = CODICE_)
+}
+```
+Create one unique file with all the sf object inside the list and save it in the local. 
+```{r, eval = FALSE}
+# Set the shapefile folder of the crowns areas
+shapefile_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas"
+
+# Merge all the object of the list in one unique sf object
+combined_long_format <- bind_rows(long_format_list)
+
+# specify the file directory where save the combined sf object
+output_file3 <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/NDVI_VALUES.shp"
+
+# Save the combined sf object in shp file 
+st_write(combined_long_format, output_file3, append= FALSE)
+```
+
+```{r, eval=FALSE}
+# Clean the R enviroment
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+In this section the NDVI mean for each date and area in calculated to show the general trend of each area. 
+```{r, message =FALSE, warning=FALSE}
+# Load the necessary packages
+library(ggplot2)
+library(dplyr)
+library(sf)
+```
+
+```{r, eval= FALSE}
+# Set the directory of the crown NDVI values
+NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/NDVI_VALUES.shp")
+
+# Calculate the mean NDVI for each date and area
+ndvi_avg_areas <- NDVI_VALUES %>%
+  group_by(date, AREA) %>%
+  summarise(mean_NDVI = mean(ndvi, na.rm = TRUE))
+
+# Save the combined sf object in a shp file
+st_write(ndvi_avg_areas, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndvi_avg_areas.shp", append= FALSE)
+```
+
+```{r, eval=FALSE}
+# Clean the R enviroment
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+In this section is showed the general NDVI trend for each area using a Theil-Sen regression because it is robust at the outliers.
+
+
+*Possiamo notare che nella zona di Iscala_Erveghe la tendenza dell'NDVI è positiva. Questo potrebbe essere un errore dovuto alla piccola dimensione delle piante di olivastro che si trovano sopra piante di lentisco. I valori di riflettanza rilevati dal satellite, con una risoluzione spaziale di 3 m, quindi sono sogetti alla forte influenza del lentisco.*
+
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(sf)
+library(dplyr)
+library(ggpubr)
+library(RColorBrewer)
+library(mblm)
+```
+
+```{r, message= FALSE, warning=FALSE}
+# Imposta l'opzione scipen su un valore elevato per eliminare la notazione esponenziale dei valori
+options(scipen = 999)
+
+# Carica il file dei valori dell'ndvi medio per ogni area
+ndvi_avg <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/ndvi_avg_areas.shp")
+
+# areas <- unique(ndvi_avg$AREA)
+# write.csv(areas, file = "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/CSV/areas.csv", row.names = FALSE, col.names = TRUE)
+
+# assumiamo che ndvi_avg sia il tuo dataframe
+# converti le date in numeri
+ndvi_avg$date_num <- as.numeric(ndvi_avg$date - min(ndvi_avg$date))
+
+# raggruppa per AREA e calcola la retta di Theil-Sen per ogni gruppo
+results <- ndvi_avg %>%
+  group_by(AREA) %>%
+  do(model = mblm(mean_NDVI ~ date_num, data = .))
+
+# stampa i risultati
+print(results)
+
+# estrai i risultati dei modelli
+model_summaries <- lapply(results$model, summary)
+
+# crea un dataframe con i coefficienti e i valori p
+coefficients_df <- data.frame(
+  AREA = results$AREA,
+  Intercept = sapply(model_summaries, function(x) x$coefficients[1, 1]),
+  Slope = sapply(model_summaries, function(x) x$coefficients[2, 1]),
+  p.value = sapply(model_summaries, function(x) x$coefficients[2, 4])
+)
+
+# aggiungi una colonna per indicare se il decremento è statisticamente significativo
+coefficients_df$Significant_Decrease <- coefficients_df$p.value < 0.05 & coefficients_df$Slope < 0
+
+# unisci i risultati con i dati originali
+data_with_results <- merge(ndvi_avg, coefficients_df, by = "AREA")
+
+# aggiungi un asterisco ai nomi delle aree con un decremento significativo
+data_with_results$AREA <- ifelse(data_with_results$Significant_Decrease, paste0(data_with_results$AREA, " *"), data_with_results$AREA)
+
+# calcola i valori previsti
+data_with_results$predicted_NDVI <- with(data_with_results, Intercept + Slope * date_num)
+
+# crea il grafico
+ggplot(data_with_results, aes(x = date, y = mean_NDVI, color = AREA)) +
+  geom_line(aes(y = predicted_NDVI)) +
+  labs(title = "Mean NDVI variation for each area",
+       subtitle = "significative decraising (*)",
+      x = "Date", y = "NDVI mean", color = "Area") +
+  theme_minimal()
+
+```
+In questo grafico è possibile visuallizzare graficamente la tendenza dell'NDVI medio per ogni area su cui è stata effettuata l'analisi. 
+
+```{r}
+# Crea un grafico separato per ogni area e visualizza l'equazione della retta di regressione
+ggplot(data = data_with_results, aes(x = date, y = mean_NDVI, group = AREA)) +
+  geom_line(aes(y = predicted_NDVI)) +
+  geom_point(aes(y = predicted_NDVI)) +
+  facet_wrap(~AREA) +
+  labs(title = "Mean NDVI variation for each area",
+       subtitle = "significative decraising (*)",
+      x = "Date", y = "NDVI mean", color = "Area") +
+    theme_minimal()
+```
+
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+
+In questa sezione preparo il file con tutti i poligoni delle chiome
+
+```{r, eval = FALSE}
+shapefile_folder  <- "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_areas"
+
+shapefile_files <- list.files(shapefile_folder, pattern = ".shp$", full.names = TRUE)
+
+# Read and combine all shapefiles
+crowns0 <- lapply(shapefile_files, st_read)
+
+# Modifica il nome della colonna CODice_ in COD
+crowns0 <- lapply(crowns0, function(x) {
+  names(x)[names(x) == "CODICE_"] <- "COD"
+  return(x)
+})
+
+# Combina i dati
+crowns <- bind_rows(crowns0)
+st_crs(crowns) <- 32632
+
+st_write(crowns, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_merged.shp", append = FALSE)
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+In questa sezione vado a lavorare sulle singole chiome degli alberi e non sui valori medi delle aree per ottenere come risultato finale un nuovo dataframe con il codice delle piante e il coefficiente angolare dell'equazione della tendenza dell'NDVI calcolata tramite una regressione lieneare.
+
+```{r, eval = FALSE}
+# Carica i pacchetti necessari
+library(tidyverse)
+library(sf)
+library(dplyr)
+library(mblm)
+```
+
+```{r, eval = FALSE}
+# Carica i file delle chiome e dei pixel estratti in formato shp
+crowns <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/crowns_merged.shp", crs = 32632)
+
+NDVI_VALUES_0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/NDVI_VALUES.shp", crs = 32632)
+
+# Crea un nuovo dataframe escludendo le date del 2023
+NDVI_VALUES <- NDVI_VALUES_0 %>% filter(year(date) != 2023)
+
+# Step 1: Calcola la media di NDVI per ogni data e COD
+ndvi_aggregated <- NDVI_VALUES %>%
+  group_by(COD, date) %>%
+  summarise(ndvi = mean(ndvi))
+
+# Effettua il join in base alla colonna COD
+joined_df <- crowns %>%
+  st_join(ndvi_aggregated %>% dplyr::select(geometry, date, ndvi), by = "COD")
+
+# Rimuovi le righe con valori NA
+cleaned_df <- na.omit(joined_df)
+
+# Filtra i dati in modo che ogni COD abbia esattamente 60 righe
+filtered_df <- cleaned_df %>%
+  group_by(COD) %>%
+  slice(1:60)
+
+# Salva l'oggetto sf combinato nel file shapefile
+st_write(filtered_df, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp", append= FALSE)
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+
+```{r}
+library(purrr)
+```
+
+```{r, eval = FALSE}
+# Carica il nuovo file combinato
+NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp")
+
+# Converti COD in un fattore (se non è già stato fatto)
+NDVI_VALUES$COD <- as.factor(NDVI_VALUES$COD)
+
+NDVI_VALUES$date <- as.Date(NDVI_VALUES$date)
+
+# Converti le date in numeri (numero di giorni dalla data minima)
+NDVI_VALUES$date_num <- as.numeric(difftime(NDVI_VALUES$date, min(NDVI_VALUES$date, na.rm = TRUE), units = "days"))
+
+# Imposta le opzioni per prevenire l'uso della notazione esponenziale
+options(scipen = 999)
+
+# Raggruppa per COD e calcola la retta di Theil-Sen per ciascun gruppo
+pixel_trend <- NDVI_VALUES %>%
+  group_by(COD) %>%
+  do(model = mblm(ndvi ~ date_num, data = .)) %>%
+  rowwise() %>%
+  mutate(
+    slope = format(purrr::map_dbl(model, ~coef(.x)[2]), scientific = FALSE),
+    intercept = format(purrr::map_dbl(model, ~coef(.x)[1]), scientific = FALSE)
+  )
+
+
+
+st_write(pixel_trend, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend.shp", append= FALSE)
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+
+In questa sezione si applica il procedimento eseguito da *Lambert et al., 2015* per stimare il trend delle serie temporali.
+
+```{r}
+library(sf)
+library(dplyr)
+library(lubridate)
+library(DBEST)
+library(progress)
+library(trend)
+library(mblm)
+library(RobustLinearReg)
+library(readr)
+```
+
+```{r, eval = FALSE}
+# Carica il nuovo file combinato
+NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp")
+```
+
+```{r, eval=FALSE}
+# Imposta l'opzione scipen su un valore elevato per eliminare la notazione esponenziale dei valori
+options(scipen = 999)
+
+# Ottieni l'elenco unico dei COD
+cod_list <- unique(NDVI_VALUES$COD)
+
+# Inizializza una lista per memorizzare i risultati
+results_list <- list()
+
+# Crea una nuova barra di avanzamento
+pb <- progress_bar$new(total = length(cod_list))
+
+# Esegui il ciclo for su ogni COD
+for (cod in cod_list) {
+  # Seleziona i dati per il COD corrente
+  data0 <- NDVI_VALUES[NDVI_VALUES$COD == cod, ]
+  
+  # Converti le date in numeri (numero di giorni dalla data minima)
+  data0$date_num <- as.numeric(data0$date - min(data0$date))
+  
+  ts <- ts(data0$ndvi, start = c(2018, 1), end = c(2022, 12), frequency = 12)
+  
+  # Esegui il test non parametrico di Mann-Kendall (MK)
+  mk_test <- smk.test(ts)
+  
+  # Usa date_num invece di date
+  theil_sen_fit <- theil_sen_regression(ndvi ~ date_num, data = data0)
+
+  # Estrazione della pendenza e l'intercetta
+  slope_ts <- theil_sen_fit$coefficients[2]
+  intercept_ts <- theil_sen_fit$coefficients[1]
+  
+  eq_theil = paste0(" slope = ", round(slope_ts, 8))
+  # Estrai Q
+  Q <- coef(theil_sen_fit)[2]
+  
+  area <- unique(data0$COD)
+  min_date <- min(data0$date)
+  max_date <- max(data0$date)
+  
+  # Imposta i margini del grafico
+  par(mar = c(5, 4.5, 4, 1),  mfrow = c(1,1))
+
+    # Crea il grafico di dispersione dei dati
+  plot(data0$date, data0$ndvi, type = "p", xlab = "Date", ylab = "NDVI values", xlim = c(min_date, max_date))
+  
+  # Sovrapponi la linea retta basata sui coeficienti del modello di Theil-Sen 
+  abline(theil_sen_fit$coefficients[1], theil_sen_fit$coefficients [2], col= "red")
+  
+  # Linea di tendenza 1 (colore blu)
+  lines(smooth.spline(data0$date, data0$ndvi), col = "blue")
+  
+  # Aggiungi il titolo e il sottotitolo
+  title(main = area)
+  mtext(eq_theil, side = 3, line = 0.3)
+# Salva i risultati e il grafico nella lista
+  results_list[[cod]] <- list(intercept_ts = intercept_ts, slope_ts = slope_ts, area = area, mk = mk_test, plot = recordPlot())
+  
+  # Aggiorna la barra di avanzamento solo se non ha raggiunto il limite
+  if (!pb$finished) {
+    pb$tick()
+  }
+}
+
+saveRDS(results_list, file = "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/SCRIPT/TrendNdviPaulilatino/Risultati/results_list.rds")
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+```{r, eval = FALSE}
+# Imposta l'opzione scipen su un valore elevato per eliminare la notazione esponenziale dei valori
+options(scipen = 999)
+
+results_list <- readRDS("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/SCRIPT/TrendNdviPaulilatino/Risultati/results_list.rds")
+
+# Inizializza un data frame vuoto
+results_df <- data.frame()
+
+# Crea una nuova barra di avanzamento
+pb <- progress_bar$new(total = length(results_list))
+
+# Loop attraverso ogni elemento in results_list2
+for(i in 1:length(results_list)) {
+  # Estrai i valori di area, intercept e slope
+  COD <- results_list[[i]]$area
+  intercept <- results_list[[i]]$intercept_ts
+  slope <- results_list[[i]]$slope_ts
+  mk_p_value <- results_list[[i]]$mk$p.value
+
+  # Crea un data frame temporaneo con questi valori
+  temp_df <- data.frame(COD = COD, intercept = intercept, 
+                        slope = slope, mk_p_value = mk_p_value)
+  
+  # Aggiungi il data frame temporaneo al nuovo database
+  results_df <- rbind(results_df, temp_df)
+  
+  # Rimuovi i nomi delle righe
+  rownames(results_df) <- NULL
+  
+ # Aggiorna la barra di avanzamento solo se non ha raggiunto il limite
+  if (!pb$finished) {
+    pb$tick()
+  }
+}
+
+# Visualizza il nuovo database
+print(results_df)
+
+# Aggiungi una nuova colonna per la classe di tendenza
+results_df <- results_df %>%
+  mutate(Trend_Class = case_when(
+    slope > 0 ~ 0,
+    mk_p_value > 0.05 ~ 0,
+    mk_p_value <= 0.05 & mk_p_value > 0.01 ~ 1,
+    mk_p_value <= 0.01 & mk_p_value > 0.001 ~ 2,
+    mk_p_value <= 0.001 ~ 3
+  ))
+
+write_csv(results_df, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/CSV/results_df_class.csv")
+
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+```{r}
+library(DBEST)
+library(sf)
+library(readr)
+library(progress)
+library(dplyr)
+library(plotly)
+library(lubridate)
+
+# Imposta l'opzione scipen su un valore elevato per eliminare la notazione esponenziale dei valori
+options(scipen = 999)
+
+# Importa il dataframe
+dataframe <- read_csv("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/CSV/results_df_class.csv")
+
+# Carica il file dell'ndvi
+NDVI_VALUES <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/merged_data_ndvi.shp")
+
+# Estrai le righe dove Trend_Class è diverso da 0
+filtered_df <- subset(dataframe, Trend_Class != 0)
+
+# Estrai la colonna "COD" da filtered_df
+cod_names_0 <- filtered_df$COD
+
+# Inizializza una lista per archiviare i risultati
+dbest_results_list_0 <- list()
+
+# Crea una nuova barra di avanzamento
+pb <- progress_bar$new(total = length(cod_names_0))
+
+# Loop attraverso i valori di "COD" in cod_names_0
+for (cod_value in cod_names_0) {
+  # Estrai i dati per il valore specifico di "COD"
+  data0 <- NDVI_VALUES[NDVI_VALUES$COD == cod_value, ]
+  
+  # Crea una serie temporale (ts)
+  ts_data <- ts(data0$ndvi, start = c(2018, 1), end = c(2022, 12), frequency = 12)
+  
+  # Applica la funzione dbest
+  dbest <- DBEST(data=ts_data, 
+                 data.type="cyclical", 
+                 algorithm="change detection", 
+                 change.magnitude	= 0.05, 
+                 first.level.shift=0.1, 
+                 second.level.shift=0.2, 
+                 duration=12, 
+                 distance.threshold="default", 
+                 alpha=0.05, 
+                 plot="off")
+  
+  # Memorizza i risultati nella nuova lista
+  dbest_results_list_0[[cod_value]] <- dbest
+  
+  # Aggiorna la barra di avanzamento solo se non ha raggiunto il limite
+  if (!pb$finished) {
+    pb$tick()
+  }
+}
+
+# Crea una nuova lista vuota per gli elementi filtrati
+dbest_results_list <- list()
+
+# Loop attraverso gli elementi della lista originale
+for (cod_value in names(dbest_results_list_0)) {
+  dbest_result <- dbest_results_list_0[[cod_value]]
+  
+  # Accedi ai valori specifici all'interno di dbest_result
+  breakpoint_no <- dbest_result$BreakpointNo
+  change_values <- dbest_result$Change
+  
+  # Controlla i criteri di filtro basati su BreakpointNo e Change e filtra ulteriolmente la lista
+  if (length(breakpoint_no) > 0 && any(breakpoint_no > 0) && any(change_values < 0)) {
+    # Aggiungi l'elemento alla nuova lista
+    dbest_results_list[[cod_value]] <- dbest_result
+  }
+}
+
+# Verifica la nuova lista
+# str(dbest_results_list)
+
+saveRDS(dbest_results_list, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/SCRIPT/TrendNdviPaulilatino/list/dbest_results_list.rds")
+```
+
+```{r}
+dbest_results_list <- readRDS("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/SCRIPT/TrendNdviPaulilatino/list/dbest_results_list.rds")
+
+# Inizializza una lista per archiviare le date di maggiore variazione negativa
+negative_change_dates <- list()
+
+# Loop attraverso i risultati di dbest
+for (cod_value in names(dbest_results_list)) {
+  # Estrai i risultati dbest per il valore specifico di "COD"
+  dbest <- dbest_results_list[[cod_value]]
+  
+  # Escludi l'indice che si riferisce alla data 2018-01
+  dbest$f_local[1] <- NA
+  
+  # Trova l'indice della maggiore variazione negativa all'inizio
+  min_change_index_start <- which.min(dbest$f_local)
+  
+  # Trova l'indice della maggiore variazione negativa alla fine
+  min_change_index_end <- which.min(dbest$f_local[(min_change_index_start + 1):length(dbest$f_local)]) + min_change_index_start
+  
+  # Calcola l'anno e il mese corrispondenti all'indice di inizio
+  year_start <- floor((min_change_index_start - 1) / 12) + 2018
+  month_start <- ((min_change_index_start - 1) %% 12) + 1
+  
+  # Calcola l'anno e il mese corrispondenti all'indice di fine
+  year_end <- floor((min_change_index_end - 1) / 12) + 2018
+  month_end <- ((min_change_index_end - 1) %% 12) + 1
+  
+  # Memorizza le date di inizio e fine in lista
+  negative_change_dates[[cod_value]] <- list(
+    start = paste(year_start, month_start, sep = "-"),
+    end = paste(year_end, month_end, sep = "-")
+  )
+}
+saveRDS(negative_change_dates, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/SCRIPT/TrendNdviPaulilatino/list/negative_change_dates.rds")
+```
+
+```{r}
+
+negative_change_dates <- readRDS("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/SCRIPT/TrendNdviPaulilatino/list/negative_change_dates.rds")
+
+# Carica il csv delle date delle immagini satellitari
+dates <- read_csv("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/date.csv")
+
+# Filtra le date rimuovendo il 2023
+dates <- dates %>% filter(year(date) != 2023)
+
+dates$date <- as.Date(dates$date) 
+
+dates$YearMonth <- format(dates$date, "%Y-%m")
+
+# Crea una lista vuota per salvare i grafici
+plot_list <- list()
+
+# Crea una nuova barra di avanzamento
+pb <- progress_bar$new(total = length(negative_change_dates))
+
+# Itera su ogni elemento della lista
+for (i in names(dbest_results_list)) {
+  
+  # Estrai l'elemento corrente
+  current_element <- dbest_results_list[[i]]
+  
+  # Estrai il trend fittato
+  fitted_trend <- current_element$Trend
+  
+  # Crea un dataframe con i dati del trend fittato e NDVI originali
+  df <- data.frame(Time = dates$date, Trend = as.numeric(fitted_trend))
+
+  # Crea il grafico con ggplot
+  p <- ggplot(df, aes(x = Time)) +
+    geom_line(aes(y = Trend), color = "blue") +
+    ggtitle(i) +
+    ylim(0.4, 0.8)
+  
+  # Estrai la data del cambiamento negativo per l'elemento corrente
+  if (i %in% names(negative_change_dates)) {
+    negative_change_date <- as.Date(paste0(negative_change_dates[[i]], "-01"), format = "%Y-%m-%d")
+    
+    # Crea un dataframe separato per la data del cambiamento negativo
+    df_change <- data.frame(Time = negative_change_date)
+    
+    # Aggiungi il dataframe al grafico come un altro layer
+    p <- p + geom_vline(data = df_change, aes(xintercept = Time), color = "red", linetype = "dashed")
+  }
+
+  # Salva il grafico nella lista
+  plot_list[[i]] <- p
+  
+  # Aggiorna la barra di avanzamento solo se non ha raggiunto il limite
+  if (!pb$finished) {
+    pb$tick()
+  }
+}
+```
+
+```{r}
+# Crea un vettore vuoto per i nomi degli elementi
+element_names <- c()
+
+# Crea un vettore vuoto per le date di cambiamento
+start_dates <- c()
+
+# Itera su ogni elemento della lista
+for (i in names(negative_change_dates)) {
+  
+  # Aggiungi il nome dell'elemento al vettore dei nomi
+  element_names <- c(element_names, i)
+  
+  # Estrai le date di inizio e fine dall'elemento corrente della lista
+  current_dates <- negative_change_dates[[i]]
+  
+  # Aggiungi le date di inizio e fine ai vettori delle date
+  start_dates <- c(start_dates, current_dates$start)
+}
+# Crea un nuovo dataframe con i nomi degli elementi e le date di cambiamento
+final_dataframe <- data.frame(COD = element_names, start = start_dates)
+
+# Rimuovi l'ultimo _ e i numeri dalla colonna COD per estrarre il nome dell'area
+final_dataframe$AREA <- gsub("_\\d+$", "", final_dataframe$COD)
+
+write.csv(final_dataframe, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/finaldataframe.csv")
+
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+------------------------------------------------------------------------
+```{r}
+# library(sf)
+# library(dplyr)
+# library(lubridate)
+# library(progress)
+# library(readr)
+# library(ggplot2)
+# library(plotly)
+```
+
+```{r}
+final_dataframe <- read_csv("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/SCRIPT/TrendNdviPaulilatino/CSV/finaldataframe.csv")
+
+final_dataframe$...1 <- NULL
+
+# Concatena COD e Dt_Cnvr in una singola stringa per il popup
+final_dataframe$PopupText <- paste("COD:", final_dataframe$COD, "<br>",
+                                   "ChangeDate:", final_dataframe$ChangeDate)
+
+final_dataframe$start <- ym(final_dataframe$start)
+
+# Estrai solo l'anno e il mese dalla colonna "start"
+final_dataframe$start <- substr(final_dataframe$start, 1, 7)
+
+# Calcola il conteggio di ogni combinazione di 'ChangeDate' e 'AREA'
+final_dataframe <- final_dataframe %>%
+  group_by(start, AREA) %>%
+  mutate(Count_start = n()) %>%
+  ungroup() 
+
+# Crea il tuo grafico ggplot2
+p <- ggplot(data = final_dataframe, aes(x = start, y = AREA)) +
+  geom_point(aes(size = Count_start)) + 
+  labs(x = "DATA", y = "AREA") +
+  scale_size(range = c(1,10)) + 
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white"),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+plot(p)
+
+# Salva il tuo grafico nella directory desiderata
+ggsave("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/SCRIPT/TrendNdviPaulilatino/NDVI-Trend-Analysis-Paulilatino_files/figure-gfm/plot.jpg", plot = p)
+```
+
+
+```{r}
+# Crea una nuova colonna 'IsMax' che indica se il conteggio è il massimo per ogni 'AREA'
+final_dataframe <- final_dataframe %>%
+  group_by(AREA) %>%
+  mutate(IsMax = ifelse(Count_start == max(Count_start), "Max", "NotMax")) %>%
+  ungroup()
+
+write_csv(final_dataframe, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/CSV/Weather/final_dataframe.csv" )
+
+p <- ggplot(data = final_dataframe, aes(x = start, y = AREA, text = PopupText)) +
+  geom_text(aes(label = Count_start, color = IsMax), vjust = +0.4) +
+  scale_color_manual(values = c("Max" = "red", "NotMax" = "black")) +
+  labs(x = "DATA", y = "AREA", color = "Legenda") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_date(limits = as.Date(c("2018-01-01", max(final_dataframe$YearMonth))), 
+               date_breaks = "1 year", date_labels = "%Y") +
+  theme_bw()
+  
+# Trasforma il grafico ggplot2 in un grafico interattivo con plotly
+interactive_plot <- ggplotly(p)
+
+# Visualizza il grafico interattivo
+interactive_plot
+```
+
+```{r}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+
+In questa sezione perparo il dataframe per visualizzare interattivamente la tendenza delle singole chiome in una mappa.
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(leaflet)
+library(sf)
+library(quadcleanR)
+```
+
+
+```{r, eval = FALSE}
+# Carico il file de
+pixel_trend0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend.shp")
+
+class <- read_csv("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/CSV/results_df_class.csv", col_names = T)
+
+# Unisci i due data frames
+merged_data <- merge(pixel_trend0, class, by = "COD")
+
+# Transform to WGS84
+pixel_trend_wgs84 <- st_transform(merged_data, crs = 4326)
+
+pixel_trend_wgs84$coef <- format(pixel_trend_wgs84$coef, scientific = FALSE)
+
+# Converti la colonna "coef" in un vettore numerico
+pixel_trend_wgs84$coef <- as.numeric(pixel_trend_wgs84$coef)
+
+pixel_trend <- pixel_trend_wgs84
+```
+
+
+```{r, eval=FALSE}
+# Definizione della funzione di classificazione
+classify_trend <- function(Trend_Class) {
+  if (Trend_Class == 0) {
+    return("Positive trends or trends not significantly different from the null slope")
+  } else if (Trend_Class== 1) {
+    return("Trends significantly negative, 0.05 > p-value > 0.01")
+  } else if (Trend_Class == 2) {
+    return("Trends significantly negative, 0.01 > p-value > 0.001")
+  } else if (Trend_Class == 3) {
+    return("Trends significantly negative, 0.001 > p-value")
+  }
+}
+
+# Applicazione della funzione al dataframe
+pixel_trend$Trend_Description <- sapply(pixel_trend$Trend_Class, classify_trend)
+
+# Converti la colonna Trend_Description in un tipo carattere
+pixel_trend$Trend_Description <- as.character(pixel_trend$Trend_Description)
+
+# Ora prova a scrivere il file .shp
+st_write(pixel_trend, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend3.shp", append = FALSE)
+
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+```{r, eval=FALSE}
+# Carico il file merged_df per inserire nella mappa i punti campionati
+sample_32632 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/VETTORIALI/DB_sample_vector.shp")
+
+# Assign the CRS of ex_sf to points
+sample_wgs84 <- st_transform(sample_32632, crs = 4326)
+
+# Extract the coordinates using st_coordinates
+coords <- st_coordinates(sample_wgs84$geometry)
+
+# Add the latitude and longitude columns to the merged_sf dataframe
+sample_wgs84$lat <- coords[, 2]
+sample_wgs84$long <- coords[, 1]
+
+st_write(sample_wgs84, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/sample_points.shp", append = FALSE )
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+
+```{r, eval=FALSE}
+lim_paul_32632 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/VETTORIALI/Limite_Amministrativo_Paulilatino_EPSG-32632.shp")
+
+# Assign the CRS of ex_sf to points
+lim_paul_wgs84 <- st_transform(lim_paul_32632, crs = 4326)
+
+st_write(lim_paul_wgs84, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/VETTORIALI/Limite_Amministrativo_Paulilatino_wgs84.shp", append = FALSE )
+```
+
+```{r, eval=FALSE}
+focolai0 <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/FOCOLAI.shp")
+
+focolai <- st_transform(focolai0, crs = 4326)
+
+st_write(focolai, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/FOCOLAI_wgs84.shp", append = FALSE )
+```
+
+```{r, eval=FALSE}
+plots <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/BUFFER_ANALISI_NDVI.shp")
+
+# Assign the CRS of ex_sf to points
+plots <- st_transform(plots, crs = 4326)
+
+st_write(plots, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/BUFFER_ANALISI_NDVI_WGS84.shp", append = TRUE)
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+------------------------------------------------------------------------
+
+```{r}
+# Imposta l'opzione scipen su un valore elevato per eliminare la notazione esponenziale dei valori
+options(scipen = 999)
+
+# Carico il nuovo file con le classi
+pixel_trend <- st_read("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/pixels_trend3.shp")
+
+# Filtra le righe con Trnd_Cl nelle classi 1, 2 o 3
+cod_class_1_2_3 <- pixel_trend$COD[pixel_trend$Trnd_Cl %in% c(1, 2, 3)]
+
+```
+
+
+
+```{r, eval = FALSE}
+beast_results_list <- readRDS("G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/VETTORIALI/NDVI_VALUES/beast_results_list.rds")
+
+# Trova i nomi comuni tra cod_class_1_2_3 e names(beast_results_list)
+common_names <- intersect(cod_class_1_2_3, names(beast_results_list))
+
+# Inizializza una nuova lista vuota
+matching_results <- list()
+
+# Loop attraverso i nomi comuni
+for (name in common_names) {
+  # Estrai l'elemento dalla lista originale
+  result <- beast_results_list[[name]]
+  
+  # Assegna l'elemento alla nuova lista con il nome originale
+  matching_results[[name]] <- result
+}
+
+# Inizializza una lista vuota per memorizzare le date con la massima probabilità di cambiamento decrescente
+dates_max_dec_prob <- list()
+
+# Loop attraverso gli elementi della lista
+for (name in common_names) {
+  result <- beast_results_list[[name]]
+  
+  # Estrai la probabilità di cambiamento decrescente dal risultato
+  dec_prob <- result$trend$dec_cpPr
+  
+  # Trova l'indice dell'elemento con la massima probabilità
+  max_dec_prob_index <- which.max(dec_prob)
+  
+  # Estrai la data corrispondente all'indice
+  date_with_max_prob <- result$trend$dec_cp[max_dec_prob_index]
+  
+  # Assegna la data alla lista con il nome dell'elemento
+  dates_max_dec_prob[[name]] <- date_with_max_prob
+}
+
+# Ora dates_max_dec_prob conterrà le date con la massima probabilità di cambiamento decrescente per ciascun elemento
+
+# Definisci una funzione per convertire le date nel formato mese-anno
+converti_in_mese_anno <- function(data_decimal) {
+  anno <- floor(data_decimal)
+  percentuale_anno <- (data_decimal - anno) * 100  # Moltiplica per 100 per ottenere la percentuale
+  mese <- ceiling((12 / 100) * percentuale_anno)  # Calcola il mese basato sulla percentuale
+  return(paste(anno, mese, sep = "-"))
+}
+
+# Converti le date nel formato mese-anno utilizzando lapply per ottenere una lista
+date_convertite <- lapply(dates_max_dec_prob, converti_in_mese_anno)
+```
+
+
+```{r, eval=FALSE}
+# 1. Creare un vettore di nomi degli elementi
+element_names <- names(date_convertite)
+
+# 2. Estrai le date convertite e crea un dataframe
+date_data <- data.frame(
+  Elemento = element_names,
+  Data_Convertita = unlist(date_convertite)
+)
+
+# 3. Estrai il valore di dec_cpPr da matching_results
+dec_cpPr_values <- lapply(matching_results, function(x) max(x$trend$dec_cpPr, na.rm = TRUE))
+
+# Converti la lista in un vettore
+dec_cpPr_values <- unlist(dec_cpPr_values)
+
+# 4. Combina i dati in un unico dataframe
+final_dataframe <- data.frame(
+  Elemento = element_names,
+  Data_Convertita = unlist(date_convertite),
+  Dec_cpPr = dec_cpPr_values
+)
+
+# 5. Esegui un loop attraverso gli elementi di dates_max_dec_prob
+for (element_name in names(dates_max_dec_prob)) {
+  # Estrai la data massima per l'elemento corrente
+  max_date <- dates_max_dec_prob[[element_name]]
+  
+  # Trova l'indice corrispondente nell'elenco dei dati finali
+  index <- which(final_dataframe$Elemento == element_name)
+  
+  # Assegna la data massima al dataframe final_dataframe
+  final_dataframe$Data_Max_Dec_Prob[index] <- max_date
+}
+
+# Ora final_dataframe contiene tutti i dati richiesti
+
+final_dataframe <- final_dataframe %>%
+  rename(COD = Elemento) 
+
+write.csv(final_dataframe, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/CSV/final_dataframe.csv")
+```
+
+```{r, eval=FALSE}
+# Ripulisci l'enviroment di R
+rm(list=ls())
+```
+
+
+
+
+
+
+
+
+

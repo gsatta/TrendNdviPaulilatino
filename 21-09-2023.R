@@ -98,7 +98,7 @@ for (cod in cod_list) {
   mtext(eq_theil, side = 3, line = 0.3)
   
   # Salva i risultati e il grafico nella lista
-  results_list[[cod]] <- list(intercept = intercept, slope = slope, area = area, plot = recordPlot(), mk = mk_test, k_pettit.test = valore_K )
+  results_list[[cod]] <- list(intercept_mblm = intercept_mblm, slope_mblm = slope_mblm, area = area, plot = recordPlot(), mk = mk_test, k_pettit.test = k_pettit.test )
   
   # Aggiorna la barra di avanzamento solo se non ha raggiunto il limite
   if (!pb$finished) {

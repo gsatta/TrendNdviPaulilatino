@@ -311,7 +311,3 @@ length(cod_names90)
 # Salva extracted_results95 in un file RDS
 saveRDS(extracted_results90, "G:/Altri computer/Il_mio_computer/DOTTORATO/PROGETTI/OLIVASTRO_PAULILATINO/REGRESSIONE/SCRIPT/TrendNdviPaulilatino/Risultati/extracted_results90.rds")
 ```
-
-
-
-
